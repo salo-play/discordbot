@@ -1,7 +1,19 @@
-// ticket_bot/index.js
-import { Client, GatewayIntentBits, Partials, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder, PermissionsBitField, REST, Routes, SlashCommandBuilder } from 'discord.js';
+import { 
+  Client, 
+  GatewayIntentBits, 
+  Partials, 
+  EmbedBuilder, 
+  ButtonBuilder, 
+  ButtonStyle, 
+  ActionRowBuilder, 
+  PermissionsBitField, 
+  REST, 
+  Routes, 
+  SlashCommandBuilder 
+} from 'discord.js';
 import dotenv from 'dotenv';
 import express from 'express';
+
 dotenv.config();
 
 const client = new Client({
@@ -25,6 +37,7 @@ client.once('ready', () => {
 client.on('interactionCreate', async interaction => {
   if (!interaction.isChatInputCommand() && !interaction.isButton()) return;
 
+  // Slash команда /ticketsetup
   if (interaction.isChatInputCommand() && interaction.commandName === 'ticketsetup') {
     const userId = interaction.user.id;
     if (!ADMIN_IDS.includes(userId)) {
@@ -81,25 +94,20 @@ client.on('interactionCreate', async interaction => {
     await interaction.reply({ content: '✅ Повідомлення для заявки та підтримки надіслано', ephemeral: true });
   }
 
+  // Кнопка закриття тікету
+  if (interaction.isButton() && interaction.customId === 'close_ticket') {
+    if (!interaction.channel) return;
+    await interaction.reply({ content: '✅ Тікет буде закрито через 5 секунд...', ephemeral: true });
+    setTimeout(() => {
+      interaction.channel.delete().catch(console.error);
+    }, 5000);
+    return;
+  }
+
+  // Кнопка створення заявки / підтримки
   if (interaction.isButton()) {
     const guild = interaction.guild;
     if (!guild) return;
-    if (interaction.isButton()) {
-  const guild = interaction.guild;
-  if (!guild) return;
-
-  // Закриття тікету
-  if (interaction.customId === 'close_ticket') {
-    if (!interaction.channel) return;
-
-    await interaction.reply({ content: '✅ Тікет буде закрито через 5 секунд...', ephemeral: true });
-
-    setTimeout(async () => {
-      await interaction.channel.delete().catch(console.error);
-    }, 5000);
-
-    return;
-  }
 
     const username = interaction.user.username.replace(/[^a-zA-Z0-9]/g, '-');
     const isApp = interaction.customId === 'create_application_ticket';
@@ -169,9 +177,9 @@ client.on('interactionCreate', async interaction => {
     await channel.send({ content: `<@${interaction.user.id}>`, embeds: [embed], components: [row] });
     await interaction.reply({ content: `✅ ${typeName.charAt(0).toUpperCase() + typeName.slice(1)} створено: ${channel}`, ephemeral: true });
   }
-};
+});
 
-
+// Slash команда для реєстрації
 const commands = [
   new SlashCommandBuilder()
     .setName('ticketsetup')
@@ -179,6 +187,7 @@ const commands = [
 ].map(command => command.toJSON());
 
 const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+
 (async () => {
   try {
     console.log('🔄 Реєстрація команд...');
@@ -192,8 +201,10 @@ const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
   }
 })();
 
+// Express Web Server для Render
 const app = express();
 app.get('/', (req, res) => res.send('Bot is live!'));
 app.listen(3000, () => console.log('🌐 Web server (порт 3000) активовано для Render'));
 
+// Запуск бота
 client.login(process.env.DISCORD_TOKEN);
