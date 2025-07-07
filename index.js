@@ -37,7 +37,7 @@ client.once('ready', () => {
 client.on('interactionCreate', async interaction => {
   if (!interaction.isChatInputCommand() && !interaction.isButton()) return;
 
-  // --- Slash команда: /ticketsetup
+  // /ticketsetup
   if (interaction.isChatInputCommand() && interaction.commandName === 'ticketsetup') {
     if (!ADMIN_IDS.includes(interaction.user.id)) {
       return interaction.reply({ content: '❌ Тільки адміністрація.', ephemeral: true });
@@ -87,60 +87,55 @@ client.on('interactionCreate', async interaction => {
     await interaction.reply({ content: '✅ Повідомлення надіслано', ephemeral: true });
   }
 
-  // --- Прийняти заявку (ADMIN only)
-  if (interaction.isButton() && interaction.customId.startsWith('accept_application_')) {
-    if (!ADMIN_IDS.includes(interaction.user.id)) {
-      return interaction.reply({ content: '❌ Тільки адміністрація.', ephemeral: true });
-    }
-
-    const memberId = interaction.customId.split('_').pop();
-    const member = await interaction.guild.members.fetch(memberId).catch(() => null);
-
-    if (!member) {
-      return interaction.reply({ content: '⚠️ Користувача не знайдено.', ephemeral: true });
-    }
-
-    await member.roles.add(ACCEPT_ROLE_ID).catch(console.error);
-    await interaction.reply({ content: `✅ Заявка прийнята. Роль видано <@${memberId}>.`, ephemeral: true });
-
-    setTimeout(() => {
-      interaction.channel?.delete().catch(console.error);
-    }, 5000);
-
-    return;
-  }
-
-  // --- Відхилити заявку (ADMIN only)
-  if (interaction.isButton() && interaction.customId.startsWith('deny_application_')) {
-    if (!ADMIN_IDS.includes(interaction.user.id)) {
-      return interaction.reply({ content: '❌ Тільки адміністрація.', ephemeral: true });
-    }
-
-    await interaction.reply({ content: '❌ Заявка відхилена. Канал буде видалено через 5 сек.', ephemeral: true });
-    setTimeout(() => {
-      interaction.channel?.delete().catch(console.error);
-    }, 5000);
-
-    return;
-  }
-
-  // --- Закрити підтримку (кнопка)
-  if (interaction.isButton() && interaction.customId === 'close_ticket') {
-    await interaction.reply({ content: '✅ Тікет закриється через 5 сек.', ephemeral: true });
-    setTimeout(() => {
-      interaction.channel?.delete().catch(console.error);
-    }, 5000);
-    return;
-  }
-
-  // --- Створення тікету
+  // Кнопки Прийняти/Відхилити
   if (interaction.isButton()) {
     const guild = interaction.guild;
     if (!guild) return;
 
+    if (interaction.customId.startsWith('accept_application_')) {
+      if (!ADMIN_IDS.includes(interaction.user.id)) {
+        return interaction.reply({ content: '❌ Тільки адміністрація.', ephemeral: true });
+      }
+
+      const memberId = interaction.customId.split('_').pop();
+      const member = await guild.members.fetch(memberId).catch(() => null);
+
+      if (!member) {
+        return interaction.reply({ content: '⚠️ Користувача не знайдено.', ephemeral: true });
+      }
+
+      await member.roles.add(ACCEPT_ROLE_ID).catch(console.error);
+      await interaction.reply({ content: `✅ Роль видано <@${memberId}>. Канал закриється.`, ephemeral: true });
+
+      setTimeout(() => {
+        interaction.channel?.delete().catch(console.error);
+      }, 5000);
+      return;
+    }
+
+    if (interaction.customId.startsWith('deny_application_')) {
+      if (!ADMIN_IDS.includes(interaction.user.id)) {
+        return interaction.reply({ content: '❌ Тільки адміністрація.', ephemeral: true });
+      }
+
+      await interaction.reply({ content: '❌ Заявка відхилена. Канал закриється.', ephemeral: true });
+      setTimeout(() => {
+        interaction.channel?.delete().catch(console.error);
+      }, 5000);
+      return;
+    }
+
+    if (interaction.customId === 'close_ticket') {
+      await interaction.reply({ content: '✅ Тікет буде закрито через 5 сек.', ephemeral: true });
+      setTimeout(() => {
+        interaction.channel?.delete().catch(console.error);
+      }, 5000);
+      return;
+    }
+
+    // Створення тікету
     const isApp = interaction.customId === 'create_application_ticket';
     const username = interaction.user.username.replace(/[^a-zA-Z0-9]/g, '-');
-
     const existing = guild.channels.cache.find(c =>
       c.name === (isApp ? `заявка-${username}` : `підтримка-${username}`)
     );
@@ -161,16 +156,24 @@ client.on('interactionCreate', async interaction => {
           PermissionsBitField.Flags.SendMessages,
           PermissionsBitField.Flags.ReadMessageHistory
         ]
-      },
-      ...ADMIN_IDS.map(id => ({
-        id,
-        allow: [
-          PermissionsBitField.Flags.ViewChannel,
-          PermissionsBitField.Flags.SendMessages,
-          PermissionsBitField.Flags.ReadMessageHistory
-        ]
-      }))
+      }
     ];
+
+    for (const adminId of ADMIN_IDS) {
+      try {
+        const admin = await guild.members.fetch(adminId);
+        overwrites.push({
+          id: admin.id,
+          allow: [
+            PermissionsBitField.Flags.ViewChannel,
+            PermissionsBitField.Flags.SendMessages,
+            PermissionsBitField.Flags.ReadMessageHistory
+          ]
+        });
+      } catch (err) {
+        console.warn(`⚠️ Не вдалося завантажити адміна ${adminId}`);
+      }
+    }
 
     const channel = await guild.channels.create({
       name: `${isApp ? 'заявка' : 'підтримка'}-${username}`,
@@ -181,7 +184,7 @@ client.on('interactionCreate', async interaction => {
     if (isApp) {
       const embed = new EmbedBuilder()
         .setTitle('✅ Заявку створено')
-        .setDescription('Очікуйте на розгляд. Адміністрація натисне одну з кнопок нижче.')
+        .setDescription('Очікуйте відповіді адміністратора.\nТільки адміністратор може прийняти або відхилити заявку.')
         .setColor(0xE0A000)
         .setFooter({ text: 'SunRise:Create • Заявка' });
 
@@ -197,11 +200,10 @@ client.on('interactionCreate', async interaction => {
       );
 
       await channel.send({ content: `<@${interaction.user.id}>`, embeds: [embed], components: [row] });
-      await interaction.reply({ content: `✅ Заявка створена: ${channel}`, ephemeral: true });
     } else {
       const embed = new EmbedBuilder()
-        .setTitle('🔧 Підтримка відкрита')
-        .setDescription('Опишіть свою проблему нижче. Для закриття натисніть кнопку.')
+        .setTitle('🔧 Підтримка')
+        .setDescription('Опишіть вашу проблему нижче. Для закриття тікету — натисніть кнопку.')
         .setColor(0x00B38F);
 
       const row = new ActionRowBuilder().addComponents(
@@ -212,8 +214,9 @@ client.on('interactionCreate', async interaction => {
       );
 
       await channel.send({ content: `<@${interaction.user.id}>`, embeds: [embed], components: [row] });
-      await interaction.reply({ content: `✅ Тікет відкрито: ${channel}`, ephemeral: true });
     }
+
+    await interaction.reply({ content: `✅ ${isApp ? 'Заявка' : 'Тікет'} створено: ${channel}`, ephemeral: true });
   }
 });
 
@@ -238,6 +241,6 @@ const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 // Express для Render
 const app = express();
 app.get('/', (req, res) => res.send('Bot is live!'));
-app.listen(3000, () => console.log('🌐 Web server активний на порту 3000'));
+app.listen(3000, () => console.log('🌐 Web server активний'));
 
 client.login(process.env.DISCORD_TOKEN);
