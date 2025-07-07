@@ -244,3 +244,12 @@ app.get('/', (req, res) => res.send('Bot is live!'));
 app.listen(3000, () => console.log('🌐 Web server активний'));
 
 client.login(process.env.DISCORD_TOKEN);
+
+import fetch from 'node-fetch';
+
+// Пінг себе кожні 5 хвилин
+setInterval(() => {
+  fetch('https://твій-проект-на-render.onrender.com/')
+    .then(() => console.log('📶 KeepAlive ping sent'))
+    .catch(err => console.warn('⚠️ KeepAlive error', err));
+}, 5 * 60 * 1000);
