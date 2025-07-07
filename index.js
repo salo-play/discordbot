@@ -55,7 +55,7 @@ client.on('interactionCreate', async interaction => {
       .setDescription(`Подайте **заявку**, щоб потрапити на сервер **SunRise:Create**\nВідповідь протягом **24 годин**`)
       .setImage('https://cdn.discordapp.com/attachments/1390316873450782793/1391775926559441016/i-made-a-traction-town-in-minecraft-using-the-create-mod-v0-wgf62t5li2sc1_2.png')
       .setFooter({ text: 'SunRise:Create • Заявка' })
-      .setColor(0xE0A000);
+      .setColor(0xe29549);
 
     const applicationButton = new ButtonBuilder()
       .setCustomId('create_application_ticket')
@@ -67,7 +67,7 @@ client.on('interactionCreate', async interaction => {
       .setDescription(`Натисніть, щоб звернутись до адміністрації.\nВідповідь протягом **24 годин**`)
       .setImage('https://cdn.discordapp.com/attachments/1390316873450782793/1390336690303930378/2023-08-30_15.20.02.png')
       .setFooter({ text: 'SunRise:Create • Підтримка' })
-      .setColor(0x00B38F);
+      .setColor(0xe29549);
 
     const supportButton = new ButtonBuilder()
       .setCustomId('create_support_ticket')
@@ -186,7 +186,7 @@ client.on('interactionCreate', async interaction => {
         .setTitle('✅ Заявку створено')
         .setDescription("Форма подачі заявки:\n\nНікнейм\nВік\nСекретне слово з правил\n\nОчікуйте відповіді адміністратора.\nТільки адміністратор може прийняти або відхилити заявку.")
         .setImage('https://cdn.discordapp.com/attachments/1390316873450782793/1391911325155987466/c8132ccdaa6f629620ac954d6c9296f7_1.png?ex=686d9df0&is=686c4c70&hm=1df433562f4afa2faf89e78fa51255452c2b4a98ca446b81b831722733cd6085&')
-        .setColor(0xE0A000)
+        .setColor(0xe29549)
         .setFooter({ text: 'SunRise:Create • Заявка' });
 
       const row = new ActionRowBuilder().addComponents(
@@ -204,13 +204,13 @@ client.on('interactionCreate', async interaction => {
     } else {
       const embed = new EmbedBuilder()
         .setTitle('🔧 Підтримка')
-        .setDescription('Опишіть вашу проблему нижче. Для закриття тікету — натисніть кнопку.')
-        .setColor(0x00B38F);
+        .setDescription('Опишіть вашу проблему нижче.\n⚠️ Будь ласка, не закривайте тікет')
+        .setColor(0xe29549);
 
       const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId('close_ticket')
-          .setLabel('❌ Закрити')
+          .setLabel("❌ Закрити(Видалити)")
           .setStyle(ButtonStyle.Danger)
       );
 
