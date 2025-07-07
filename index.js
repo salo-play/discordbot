@@ -205,6 +205,7 @@ client.on('interactionCreate', async interaction => {
       const embed = new EmbedBuilder()
         .setTitle('🔧 Підтримка')
         .setDescription('Опишіть вашу проблему нижче.\n⚠️ Будь ласка, не закривайте тікет')
+        .setImage('https://cdn.discordapp.com/attachments/1390316873450782793/1390336690303930378/2023-08-30_15.20.02.png')
         .setColor(0xe29549);
 
       const row = new ActionRowBuilder().addComponents(
