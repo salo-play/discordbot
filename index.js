@@ -185,6 +185,7 @@ client.on('interactionCreate', async interaction => {
       const embed = new EmbedBuilder()
         .setTitle('✅ Заявку створено')
         .setDescription("Форма подачі заявки:\n\nНікнейм\nВік\nСекретне слово з правил\n\nОчікуйте відповіді адміністратора.\nТільки адміністратор може прийняти або відхилити заявку.")
+        .setImage('https://cdn.discordapp.com/attachments/1390316873450782793/1391911325155987466/c8132ccdaa6f629620ac954d6c9296f7_1.png?ex=686d9df0&is=686c4c70&hm=1df433562f4afa2faf89e78fa51255452c2b4a98ca446b81b831722733cd6085&')
         .setColor(0xE0A000)
         .setFooter({ text: 'SunRise:Create • Заявка' });
 
