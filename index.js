@@ -141,7 +141,7 @@ client.on('interactionCreate', async interaction => {
     );
 
     if (existing) {
-      return interaction.reply({ content: `❌ У вас вже є відкритий ${isApp ? 'заявка' : 'тікет'}.`, ephemeral: true });
+      return interaction.reply({ content: `❌ У вас вже є відкритий/а ${isApp ? 'заявка' : 'тікет'}.`, ephemeral: true });
     }
 
     const overwrites = [
@@ -184,7 +184,7 @@ client.on('interactionCreate', async interaction => {
     if (isApp) {
       const embed = new EmbedBuilder()
         .setTitle('✅ Заявку створено')
-        .setDescription('Очікуйте відповіді адміністратора.\nТільки адміністратор може прийняти або відхилити заявку.')
+        .setDescription("Форма подачі заявки:\nНікнейм\nВік\nСекретне слово з правил\nОчікуйте відповіді адміністратора.\nТільки адміністратор може прийняти або відхилити заявку.")
         .setColor(0xE0A000)
         .setFooter({ text: 'SunRise:Create • Заявка' });
 
