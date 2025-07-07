@@ -169,7 +169,7 @@ client.on('interactionCreate', async interaction => {
     await channel.send({ content: `<@${interaction.user.id}>`, embeds: [embed], components: [row] });
     await interaction.reply({ content: `✅ ${typeName.charAt(0).toUpperCase() + typeName.slice(1)} створено: ${channel}`, ephemeral: true });
   }
-});
+};
 
 
 const commands = [
