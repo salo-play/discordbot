@@ -84,16 +84,39 @@ client.on('interactionCreate', async interaction => {
   if (interaction.isButton()) {
     const guild = interaction.guild;
     if (!guild) return;
+    if (interaction.isButton()) {
+  const guild = interaction.guild;
+  if (!guild) return;
+
+  // Закриття тікету
+  if (interaction.customId === 'close_ticket') {
+    if (!interaction.channel) return;
+
+    await interaction.reply({ content: '✅ Тікет буде закрито через 5 секунд...', ephemeral: true });
+
+    setTimeout(async () => {
+      await interaction.channel.delete().catch(console.error);
+    }, 5000);
+
+    return;
+  }
 
     const username = interaction.user.username.replace(/[^a-zA-Z0-9]/g, '-');
     const isApp = interaction.customId === 'create_application_ticket';
-    const typeName = isApp ? 'заявка' : 'підтримка';
-    const existing = guild.channels.cache.find(c => c.name === `${typeName}-${username}`);
-    if (existing) {
-      await interaction.reply({ content: `❌ У вас вже є відкритий ${typeName}.`, ephemeral: true });
+
+    const existingApp = guild.channels.cache.find(c => c.name === `заявка-${username}`);
+    const existingSupport = guild.channels.cache.find(c => c.name === `підтримка-${username}`);
+
+    if (isApp && existingApp) {
+      await interaction.reply({ content: '❌ У вас вже є відкрита заявка.', ephemeral: true });
+      return;
+    }
+    if (!isApp && existingSupport) {
+      await interaction.reply({ content: '❌ У вас вже є відкритий тікет підтримки.', ephemeral: true });
       return;
     }
 
+    const typeName = isApp ? 'заявка' : 'підтримка';
     const overwrites = [
       {
         id: guild.roles.everyone,
@@ -148,6 +171,7 @@ client.on('interactionCreate', async interaction => {
   }
 });
 
+
 const commands = [
   new SlashCommandBuilder()
     .setName('ticketsetup')
@@ -168,7 +192,6 @@ const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
   }
 })();
 
-// express для Render
 const app = express();
 app.get('/', (req, res) => res.send('Bot is live!'));
 app.listen(3000, () => console.log('🌐 Web server (порт 3000) активовано для Render'));
