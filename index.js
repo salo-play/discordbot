@@ -1,12 +1,8 @@
-// index.js
-import express from 'express';
+// ticket_bot/index.js
 import { Client, GatewayIntentBits, Partials, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder, PermissionsBitField, REST, Routes, SlashCommandBuilder } from 'discord.js';
 import dotenv from 'dotenv';
+import express from 'express';
 dotenv.config();
-
-const app = express();
-app.get('/', (req, res) => res.send('Bot is live!'));
-app.listen(3000, () => console.log('🌐 Web server (порт 3000) активовано для Render'));
 
 const client = new Client({
   intents: [
@@ -56,7 +52,12 @@ client.on('interactionCreate', async interaction => {
       .setLabel('📩 Подати заявку!')
       .setStyle(ButtonStyle.Primary);
 
-    await appChannel.send({ embeds: [applicationEmbed], components: [new ActionRowBuilder().addComponents(applicationButton)] });
+    const applicationRow = new ActionRowBuilder().addComponents(applicationButton);
+
+    await appChannel.send({
+      embeds: [applicationEmbed],
+      components: [applicationRow]
+    });
 
     const supportEmbed = new EmbedBuilder()
       .setTitle('Підтримка')
@@ -70,7 +71,12 @@ client.on('interactionCreate', async interaction => {
       .setLabel('📨 Створити тікет!')
       .setStyle(ButtonStyle.Success);
 
-    await supportChannel.send({ embeds: [supportEmbed], components: [new ActionRowBuilder().addComponents(supportButton)] });
+    const supportRow = new ActionRowBuilder().addComponents(supportButton);
+
+    await supportChannel.send({
+      embeds: [supportEmbed],
+      components: [supportRow]
+    });
 
     await interaction.reply({ content: '✅ Повідомлення для заявки та підтримки надіслано', ephemeral: true });
   }
@@ -79,83 +85,66 @@ client.on('interactionCreate', async interaction => {
     const guild = interaction.guild;
     if (!guild) return;
 
-    const username = interaction.user.username.toLowerCase().replace(/[^a-z0-9]/gi, '');
-
-    const existingChannel = guild.channels.cache.find(c =>
-      c.name === `заявка-${username}` || c.name === `підтримка-${username}`
-    );
-
-    if (existingChannel) {
-      await interaction.reply({ content: '❌ У вас вже є відкритий тікет або заявка.', ephemeral: true });
+    const username = interaction.user.username.replace(/[^a-zA-Z0-9]/g, '-');
+    const isApp = interaction.customId === 'create_application_ticket';
+    const typeName = isApp ? 'заявка' : 'підтримка';
+    const existing = guild.channels.cache.find(c => c.name === `${typeName}-${username}`);
+    if (existing) {
+      await interaction.reply({ content: `❌ У вас вже є відкритий ${typeName}.`, ephemeral: true });
       return;
     }
 
-    let channelName, title;
+    const overwrites = [
+      {
+        id: guild.roles.everyone,
+        deny: [PermissionsBitField.Flags.ViewChannel]
+      },
+      {
+        id: interaction.user.id,
+        allow: [
+          PermissionsBitField.Flags.ViewChannel,
+          PermissionsBitField.Flags.SendMessages,
+          PermissionsBitField.Flags.ReadMessageHistory
+        ]
+      }
+    ];
 
-    if (interaction.customId === 'create_application_ticket') {
-      channelName = `заявка-${username}`;
-      title = 'Ваша заявка створена!';
-    } else if (interaction.customId === 'create_support_ticket') {
-      channelName = `підтримка-${username}`;
-      title = 'Ваш тікет підтримки створено!';
-    } else {
-      return;
+    for (const adminId of ADMIN_IDS) {
+      try {
+        const member = await guild.members.fetch(adminId);
+        overwrites.push({
+          id: member.user.id,
+          allow: [
+            PermissionsBitField.Flags.ViewChannel,
+            PermissionsBitField.Flags.SendMessages,
+            PermissionsBitField.Flags.ReadMessageHistory
+          ]
+        });
+      } catch {
+        console.warn(`⚠️ Не вдалося завантажити адміна з ID ${adminId}`);
+      }
     }
 
-    const newChannel = await guild.channels.create({
-      name: channelName,
+    const channel = await guild.channels.create({
+      name: `${typeName}-${username}`,
       type: 0,
-      permissionOverwrites: [
-        {
-          id: guild.roles.everyone,
-          deny: [PermissionsBitField.Flags.ViewChannel]
-        },
-        {
-          id: interaction.user.id,
-          allow: [
-            PermissionsBitField.Flags.ViewChannel,
-            PermissionsBitField.Flags.SendMessages,
-            PermissionsBitField.Flags.ReadMessageHistory
-          ]
-        },
-        ...ADMIN_IDS.map(id => ({
-          id,
-          allow: [
-            PermissionsBitField.Flags.ViewChannel,
-            PermissionsBitField.Flags.SendMessages,
-            PermissionsBitField.Flags.ReadMessageHistory
-          ]
-        }))
-      ]
+      permissionOverwrites: overwrites
     });
 
     const embed = new EmbedBuilder()
-      .setTitle(title)
-      .setDescription('Очікуйте відповіді адміністрації.')
-      .setColor(0x00B38F);
+      .setTitle(`${typeName.charAt(0).toUpperCase() + typeName.slice(1)} створено`)
+      .setDescription('Якщо питання вирішено, натисніть кнопку нижче для закриття.')
+      .setColor(0xff0000);
 
-    const closeButton = new ButtonBuilder()
+    const button = new ButtonBuilder()
       .setCustomId('close_ticket')
-      .setLabel('Закрити')
+      .setLabel('❌ Закрити')
       .setStyle(ButtonStyle.Danger);
 
-    await newChannel.send({
-      content: `<@${interaction.user.id}>`,
-      embeds: [embed],
-      components: [new ActionRowBuilder().addComponents(closeButton)]
-    });
+    const row = new ActionRowBuilder().addComponents(button);
 
-    await interaction.reply({ content: `✅ Канал створено: ${newChannel}`, ephemeral: true });
-  }
-
-  if (interaction.isButton() && interaction.customId === 'close_ticket') {
-    if (!ADMIN_IDS.includes(interaction.user.id)) {
-      await interaction.reply({ content: '❌ Ви не маєте прав закривати цей тікет.', ephemeral: true });
-      return;
-    }
-
-    await interaction.reply({ content: 'Тікет буде закрито через 3 секунди...', ephemeral: true });
-    setTimeout(() => interaction.channel?.delete().catch(() => null), 3000);
+    await channel.send({ content: `<@${interaction.user.id}>`, embeds: [embed], components: [row] });
+    await interaction.reply({ content: `✅ ${typeName.charAt(0).toUpperCase() + typeName.slice(1)} створено: ${channel}`, ephemeral: true });
   }
 });
 
@@ -163,17 +152,26 @@ const commands = [
   new SlashCommandBuilder()
     .setName('ticketsetup')
     .setDescription('Надіслати повідомлення для створення тікетів')
-].map(cmd => cmd.toJSON());
+].map(command => command.toJSON());
 
 const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 (async () => {
   try {
     console.log('🔄 Реєстрація команд...');
-    await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), { body: commands });
+    await rest.put(
+      Routes.applicationCommands(process.env.CLIENT_ID),
+      { body: commands }
+    );
     console.log('✅ Команди зареєстровано');
   } catch (error) {
     console.error('❌ Помилка реєстрації команд:', error);
   }
 })();
+
+// express для Render
+import express from 'express';
+const app = express();
+app.get('/', (req, res) => res.send('Bot is live!'));
+app.listen(3000, () => console.log('🌐 Web server (порт 3000) активовано для Render'));
 
 client.login(process.env.DISCORD_TOKEN);
