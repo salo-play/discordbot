@@ -1,4 +1,3 @@
-import './keep_alive.js';
 // ticket_bot/index.js
 import { Client, GatewayIntentBits, Partials, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder, PermissionsBitField, REST, Routes, SlashCommandBuilder } from 'discord.js';
 import dotenv from 'dotenv';
