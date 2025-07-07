@@ -249,7 +249,7 @@ import fetch from 'node-fetch';
 
 // Пінг себе кожні 5 хвилин
 setInterval(() => {
-  fetch('https://твій-проект-на-render.onrender.com/')
+  fetch('https://discordbot-kmzu.onrender.com')
     .then(() => console.log('📶 KeepAlive ping sent'))
     .catch(err => console.warn('⚠️ KeepAlive error', err));
 }, 5 * 60 * 1000);
