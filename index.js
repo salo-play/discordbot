@@ -1,4 +1,16 @@
 // ticket_bot/index.js
+import express from 'express';
+
+const app = express();
+
+app.get('/', (req, res) => {
+  res.send('✅ Discord bot is running');
+});
+
+app.listen(3000, () => {
+  console.log('🌐 Web server (порт 3000) активовано для Render');
+});
+
 import { Client, GatewayIntentBits, Partials, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder, PermissionsBitField, REST, Routes, SlashCommandBuilder } from 'discord.js';
 import dotenv from 'dotenv';
 dotenv.config();
