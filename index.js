@@ -169,7 +169,6 @@ const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 })();
 
 // express для Render
-import express from 'express';
 const app = express();
 app.get('/', (req, res) => res.send('Bot is live!'));
 app.listen(3000, () => console.log('🌐 Web server (порт 3000) активовано для Render'));
