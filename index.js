@@ -53,7 +53,7 @@ client.on('interactionCreate', async interaction => {
     const applicationEmbed = new EmbedBuilder()
       .setTitle('Як зайти?')
       .setDescription(`Подайте **заявку**, щоб потрапити на сервер **Cognia**\nВідповідь протягом **24 годин**`)
-      .setImage('https://cdn.discordapp.com/attachments/1390316873450782793/1391775926559441016/i-made-a-traction-town-in-minecraft-using-the-create-mod-v0-wgf62t5li2sc1_2.png')
+      .setImage('https://cdn.discordapp.com/attachments/1390316873450782793/1392892452075208794/c8132ccdaa6f629620ac954d6c9296f7_3.png?ex=68712faf&is=686fde2f&hm=62dad7e5fcf9bd44faf6b9c163176f796c85897d73467611595968b523925a52&')
       .setFooter({ text: 'Cognia • Поринь у світ моду Create!' })
       .setColor(0xe29549);
 
@@ -181,7 +181,7 @@ client.on('interactionCreate', async interaction => {
       const embed = new EmbedBuilder()
         .setTitle('✅ Заявку створено')
         .setDescription("Форма подачі заявки:\n\nНікнейм\nВік\nСекретне слово з правил\n\nОчікуйте відповіді адміністратора.\nТільки адміністратор може прийняти або відхилити заявку.")
-        .setImage('https://cdn.discordapp.com/attachments/1390316873450782793/1391911325155987466/c8132ccdaa6f629620ac954d6c9296f7_1.png?ex=686d9df0&is=686c4c70&hm=1df433562f4afa2faf89e78fa51255452c2b4a98ca446b81b831722733cd6085&')
+        .setImage('https://cdn.discordapp.com/attachments/1390316873450782793/1392892451685142620/train_3.png?ex=68712faf&is=686fde2f&hm=a1849b8246f27c5f8869d26e781f9ff7360234cee63a52cbbbf0efc3569a77ca&')
         .setColor(0xe29549)
         .setFooter({ text: 'Cognia • Поринь у світ моду Create!' });
 
