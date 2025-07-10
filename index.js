@@ -105,7 +105,7 @@ client.on('interactionCreate', async interaction => {
       }
 
       await member.roles.add(ACCEPT_ROLE_ID).catch(console.error);
-      await interaction.reply({ content: `✅ Роль видано <@${memberId}>. Канал закриється.`, ephemeral: false });
+      await interaction.reply({ content: `✅ Заявка <@${memberId}> прийнята. Гарної вам гри!`, ephemeral: false });
       return;
     }
 
@@ -114,7 +114,7 @@ client.on('interactionCreate', async interaction => {
         return interaction.reply({ content: '❌ Тільки адміністрація.', ephemeral: true });
       }
 
-      await interaction.reply({ content: '❌ Заявка відхилена. Канал закриється.', ephemeral: true });
+      await interaction.reply({ content: '❌ Заявка відхилена. Канал закриється.', ephemeral: false });
       setTimeout(() => {
         interaction.channel?.delete().catch(console.error);
       }, 5000);
