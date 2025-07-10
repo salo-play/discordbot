@@ -52,9 +52,9 @@ client.on('interactionCreate', async interaction => {
 
     const applicationEmbed = new EmbedBuilder()
       .setTitle('Як зайти?')
-      .setDescription(`Подайте **заявку**, щоб потрапити на сервер **SunRise:Create**\nВідповідь протягом **24 годин**`)
+      .setDescription(`Подайте **заявку**, щоб потрапити на сервер **Cognia**\nВідповідь протягом **24 годин**`)
       .setImage('https://cdn.discordapp.com/attachments/1390316873450782793/1391775926559441016/i-made-a-traction-town-in-minecraft-using-the-create-mod-v0-wgf62t5li2sc1_2.png')
-      .setFooter({ text: 'SunRise:Create • Заявка' })
+      .setFooter({ text: 'Cognia • Поринь у світ моду Create!' })
       .setColor(0xe29549);
 
     const applicationButton = new ButtonBuilder()
@@ -66,7 +66,7 @@ client.on('interactionCreate', async interaction => {
       .setTitle('Підтримка')
       .setDescription(`Натисніть, щоб звернутись до адміністрації.\nВідповідь протягом **24 годин**`)
       .setImage('https://cdn.discordapp.com/attachments/1390316873450782793/1390336690303930378/2023-08-30_15.20.02.png')
-      .setFooter({ text: 'SunRise:Create • Підтримка' })
+      .setFooter({ text: 'Cognia • Підтримка' })
       .setColor(0xe29549);
 
     const supportButton = new ButtonBuilder()
@@ -183,7 +183,7 @@ client.on('interactionCreate', async interaction => {
         .setDescription("Форма подачі заявки:\n\nНікнейм\nВік\nСекретне слово з правил\n\nОчікуйте відповіді адміністратора.\nТільки адміністратор може прийняти або відхилити заявку.")
         .setImage('https://cdn.discordapp.com/attachments/1390316873450782793/1391911325155987466/c8132ccdaa6f629620ac954d6c9296f7_1.png?ex=686d9df0&is=686c4c70&hm=1df433562f4afa2faf89e78fa51255452c2b4a98ca446b81b831722733cd6085&')
         .setColor(0xe29549)
-        .setFooter({ text: 'SunRise:Create • Заявка' });
+        .setFooter({ text: 'Cognia • Поринь у світ моду Create!' });
 
       const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
@@ -202,12 +202,13 @@ client.on('interactionCreate', async interaction => {
         .setTitle('🔧 Підтримка')
         .setDescription('Опишіть вашу проблему нижче.\n⚠️ Будь ласка, не закривайте тікет')
         .setImage('https://cdn.discordapp.com/attachments/1390316873450782793/1390336690303930378/2023-08-30_15.20.02.png')
-        .setColor(0xe29549);
+        .setColor(0xe29549)
+        .setFooter({ text: 'Cognia • Підтримка' });
 
       const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId('close_ticket')
-          .setLabel("❌ Закрити(Видалити)")
+          .setLabel("❌ Закрити (Видалити)")
           .setStyle(ButtonStyle.Danger)
       );
 
