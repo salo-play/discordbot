@@ -180,7 +180,7 @@ client.on('interactionCreate', async interaction => {
     if (isApp) {
       const embed = new EmbedBuilder()
         .setTitle('✅ Заявку створено')
-        .setDescription("Форма подачі заявки:\n\nНікнейм\nВік\nСекретне слово з правил\n\nОчікуйте відповіді адміністратора.\nТільки адміністратор може прийняти або відхилити заявку.")
+        .setDescription("Форма подачі заявки:\n\nВік\nСекретне слово з правил\nЯк ви дізнались про наш проект?\n\nОчікуйте відповіді адміністратора.\nТільки адміністратор може прийняти або відхилити заявку.")
         .setImage('https://cdn.discordapp.com/attachments/1390316873450782793/1392892451685142620/train_3.png?ex=68712faf&is=686fde2f&hm=a1849b8246f27c5f8869d26e781f9ff7360234cee63a52cbbbf0efc3569a77ca&')
         .setColor(0xe29549)
         .setFooter({ text: 'Cognia • Поринь у світ моду Create!' });
