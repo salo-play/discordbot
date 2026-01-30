@@ -222,7 +222,7 @@ client.on('interactionCreate', async interaction => {
 const commands = [
   new SlashCommandBuilder()
     .setName('ticketsetup')
-    .setDescription('Надіслати кнопку створення заявки')
+    .setDescription('Надіслати ембед з кнопкою для створення заявки')
 ].map(c => c.toJSON());
 
 const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
