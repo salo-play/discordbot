@@ -37,7 +37,7 @@ const client = new Client({
 // ================== CONFIG ==================
 
 const ADMIN_IDS = ['845277573654380555', '1054470308112900126'];
-const APPLICATION_CHANNEL_ID = '1390301425984081960';
+const APPLICATION_CHANNEL_ID = '1390301425984081960';  // Перевірте, чи це правильний ID каналу
 const APPLICATION_CATEGORY_ID = '1466868416014192781';
 const ACCEPT_ROLE_ID = '1390325276159770786';
 
@@ -135,6 +135,8 @@ client.on('interactionCreate', async interaction => {
       permissionOverwrites: overwrites
     });
 
+    console.log('Channel created:', channel.name); // Додано логування
+
     const embed = new EmbedBuilder()
       .setTitle('📨 Нова заявка')
       .setColor(0xe29549)
@@ -156,7 +158,14 @@ client.on('interactionCreate', async interaction => {
         .setStyle(ButtonStyle.Danger)
     );
 
-    await channel.send({ content: `<@${interaction.user.id}>`, embeds: [embed], components: [buttons] });
+    // Перевірка, чи канал створено перед відправкою повідомлення
+    if (channel) {
+      await channel.send({ content: `<@${interaction.user.id}>`, embeds: [embed], components: [buttons] });
+      console.log('Message sent to channel:', channel.name);
+    } else {
+      console.error('Не вдалося створити канал або відправити повідомлення.');
+    }
+
     await interaction.reply({ content: '✅ Заявка створена!', ephemeral: true });
   }
 
