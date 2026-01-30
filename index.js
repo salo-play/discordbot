@@ -16,7 +16,6 @@ import {
   InteractionType,
   ChannelType
 } from 'discord.js';
-
 import dotenv from 'dotenv';
 import express from 'express';
 import { Rcon } from 'rcon-client';
@@ -37,7 +36,7 @@ const client = new Client({
 // ================== CONFIG ==================
 
 const ADMIN_IDS = ['845277573654380555', '1054470308112900126'];
-const APPLICATION_CHANNEL_ID = '1390301425984081960';  // Перевірте, чи це правильний ID каналу
+const APPLICATION_CHANNEL_ID = '1390301425984081960';
 const APPLICATION_CATEGORY_ID = '1466868416014192781';
 const ACCEPT_ROLE_ID = '1390325276159770786';
 
@@ -127,46 +126,52 @@ client.on('interactionCreate', async interaction => {
       } catch {}
     }
 
-    const channel = await guild.channels.create({
-      name: `заявка-${username}`,
-      type: ChannelType.GuildText,
-      parent: APPLICATION_CATEGORY_ID,
-      topic: `MC_NICK:${mcNick}`,
-      permissionOverwrites: overwrites
-    });
+    try {
+      // Створюємо канал
+      const channel = await guild.channels.create({
+        name: `заявка-${username}`,
+        type: ChannelType.GuildText,
+        parent: APPLICATION_CATEGORY_ID,
+        topic: `MC_NICK:${mcNick}`,
+        permissionOverwrites: overwrites
+      });
 
-    console.log('Channel created:', channel.name); // Додано логування
+      console.log('Channel created:', channel.name); // Лог для перевірки створення каналу
 
-    const embed = new EmbedBuilder()
-      .setTitle('📨 Нова заявка')
-      .setColor(0xe29549)
-      .setDescription(
-        `**Minecraft нік:** ${mcNick}\n` +
-        `**Вік:** ${interaction.fields.getTextInputValue('age')}\n` +
-        `**Секретне слово:** ${interaction.fields.getTextInputValue('secret')}\n` +
-        `**Як дізнались:** ${interaction.fields.getTextInputValue('how_know')}`
+      const embed = new EmbedBuilder()
+        .setTitle('📨 Нова заявка')
+        .setColor(0xe29549)
+        .setDescription(
+          `**Minecraft нік:** ${mcNick}\n` +
+          `**Вік:** ${interaction.fields.getTextInputValue('age')}\n` +
+          `**Секретне слово:** ${interaction.fields.getTextInputValue('secret')}\n` +
+          `**Як дізнались:** ${interaction.fields.getTextInputValue('how_know')}`
+        );
+
+      const buttons = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`accept_application_${interaction.user.id}`)
+          .setLabel('✅ Прийняти')
+          .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+          .setCustomId(`deny_application_${interaction.user.id}`)
+          .setLabel('❌ Відхилити')
+          .setStyle(ButtonStyle.Danger)
       );
 
-    const buttons = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`accept_application_${interaction.user.id}`)
-        .setLabel('✅ Прийняти')
-        .setStyle(ButtonStyle.Success),
-      new ButtonBuilder()
-        .setCustomId(`deny_application_${interaction.user.id}`)
-        .setLabel('❌ Відхилити')
-        .setStyle(ButtonStyle.Danger)
-    );
+      // Перевірка чи канал існує і надсилаємо повідомлення
+      if (channel && channel.isText()) {
+        await channel.send({ content: `<@${interaction.user.id}>`, embeds: [embed], components: [buttons] });
+        console.log('Message sent to channel:', channel.name); // Лог після успішного відправлення
+      } else {
+        console.error('Не вдалося знайти або створити канал.');
+      }
 
-    // Перевірка, чи канал створено перед відправкою повідомлення
-    if (channel) {
-      await channel.send({ content: `<@${interaction.user.id}>`, embeds: [embed], components: [buttons] });
-      console.log('Message sent to channel:', channel.name);
-    } else {
-      console.error('Не вдалося створити канал або відправити повідомлення.');
+      await interaction.reply({ content: '✅ Заявка створена!', ephemeral: true });
+    } catch (error) {
+      console.error('Error creating channel or sending message:', error);
+      await interaction.reply({ content: '❌ Помилка при створенні каналу або відправленні повідомлення.', ephemeral: true });
     }
-
-    await interaction.reply({ content: '✅ Заявка створена!', ephemeral: true });
   }
 
   // ---------- ACCEPT ----------
@@ -233,12 +238,4 @@ const app = express();
 app.get('/', (_, res) => res.send('Bot alive'));
 app.listen(3000);
 
-// ================== LOGIN ==================
-
-client.login(process.env.DISCORD_TOKEN);
-
-// ================== KEEP ALIVE ==================
-
-setInterval(() => {
-  fetch('https://discordbot-kmzu.onrender.com').catch(() => {});
-}, 5 * 60 * 1000);
+// =================
