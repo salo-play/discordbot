@@ -9,10 +9,18 @@ import {
   PermissionsBitField,
   REST,
   Routes,
-  SlashCommandBuilder
+  SlashCommandBuilder,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+  InteractionType,
+  ChannelType
 } from 'discord.js';
 import dotenv from 'dotenv';
 import express from 'express';
+import { Rcon } from 'rcon-client';
+import fetch from 'node-fetch';
+
 dotenv.config();
 
 const client = new Client({
@@ -29,197 +37,163 @@ const ADMIN_IDS = ['845277573654380555', '1054470308112900126'];
 const APPLICATION_CHANNEL_ID = '1390301425984081960';
 const SUPPORT_CHANNEL_ID = '1390325195935584296';
 const ACCEPT_ROLE_ID = '1390325276159770786';
+const APPLICATION_CATEGORY_ID = '1466868416014192781';
+
+// RCON налаштування
+const RCON_CONFIG = {
+  host: 'IP_СЕРВЕРА', // постав свій IP
+  port: 25575,
+  password: process.env.RCON_PASSWORD
+};
 
 client.once('ready', () => {
   console.log(`🔗 Logged in as ${client.user.tag}`);
 });
 
+// Обробка кнопок та модалок
 client.on('interactionCreate', async interaction => {
-  if (!interaction.isChatInputCommand() && !interaction.isButton()) return;
+  if (!interaction.isButton() && !interaction.isModalSubmit()) return;
 
-  // /ticketsetup
-  if (interaction.isChatInputCommand() && interaction.commandName === 'ticketsetup') {
-    if (!ADMIN_IDS.includes(interaction.user.id)) {
-      return interaction.reply({ content: '❌ Тільки адміністрація.', ephemeral: true });
-    }
+  // --------------------
+  // Кнопка подати заявку
+  // --------------------
+  if (interaction.isButton() && interaction.customId === 'create_application_ticket') {
+    const modal = new ModalBuilder()
+      .setCustomId('application_form')
+      .setTitle('Форма заявки на сервер Cognia');
 
-    const appChannel = client.channels.cache.get(APPLICATION_CHANNEL_ID);
-    const supportChannel = client.channels.cache.get(SUPPORT_CHANNEL_ID);
+    const ageInput = new TextInputBuilder()
+      .setCustomId('age')
+      .setLabel('Вік')
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true);
 
-    if (!appChannel || !supportChannel) {
-      return interaction.reply({ content: '❌ Канали не знайдено.', ephemeral: true });
-    }
+    const secretInput = new TextInputBuilder()
+      .setCustomId('secret')
+      .setLabel('Секретне слово з правил')
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true);
 
-    const applicationEmbed = new EmbedBuilder()
-      .setTitle('Як зайти?')
-      .setDescription(`Подайте **заявку**, щоб потрапити на сервер **Cognia**\nВідповідь протягом **24 годин**`)
-      .setImage('https://cdn.discordapp.com/attachments/1390316873450782793/1392892452075208794/c8132ccdaa6f629620ac954d6c9296f7_3.png?ex=68712faf&is=686fde2f&hm=62dad7e5fcf9bd44faf6b9c163176f796c85897d73467611595968b523925a52&')
-      .setFooter({ text: 'Cognia • Поринь у світ моду Create!' })
-      .setColor(0xe29549);
+    const knowInput = new TextInputBuilder()
+      .setCustomId('how_know')
+      .setLabel('Як дізнались про проект?')
+      .setStyle(TextInputStyle.Paragraph)
+      .setRequired(true);
 
-    const applicationButton = new ButtonBuilder()
-      .setCustomId('create_application_ticket')
-      .setLabel('📩 Подати заявку!')
-      .setStyle(ButtonStyle.Primary);
+    modal.addComponents(
+      new ActionRowBuilder().addComponents(ageInput),
+      new ActionRowBuilder().addComponents(secretInput),
+      new ActionRowBuilder().addComponents(knowInput)
+    );
 
-    const supportEmbed = new EmbedBuilder()
-      .setTitle('Підтримка')
-      .setDescription(`Натисніть, щоб звернутись до адміністрації.\nВідповідь протягом **24 годин**`)
-      .setImage('https://cdn.discordapp.com/attachments/1390316873450782793/1390336690303930378/2023-08-30_15.20.02.png')
-      .setFooter({ text: 'Cognia • Підтримка' })
-      .setColor(0xe29549);
-
-    const supportButton = new ButtonBuilder()
-      .setCustomId('create_support_ticket')
-      .setLabel('📨 Створити тікет!')
-      .setStyle(ButtonStyle.Success);
-
-    await appChannel.send({
-      embeds: [applicationEmbed],
-      components: [new ActionRowBuilder().addComponents(applicationButton)]
-    });
-
-    await supportChannel.send({
-      embeds: [supportEmbed],
-      components: [new ActionRowBuilder().addComponents(supportButton)]
-    });
-
-    await interaction.reply({ content: '✅ Повідомлення надіслано', ephemeral: true });
+    return interaction.showModal(modal);
   }
 
-  // Кнопки Прийняти/Відхилити
-  if (interaction.isButton()) {
+  // --------------------
+  // Заповнена форма заявки
+  // --------------------
+  if (interaction.type === InteractionType.ModalSubmit && interaction.customId === 'application_form') {
     const guild = interaction.guild;
     if (!guild) return;
 
-    if (interaction.customId.startsWith('accept_application_')) {
-      if (!ADMIN_IDS.includes(interaction.user.id)) {
-        return interaction.reply({ content: '❌ Тільки адміністрація.', ephemeral: true });
-      }
-
-      const memberId = interaction.customId.split('_').pop();
-      const member = await guild.members.fetch(memberId).catch(() => null);
-
-      if (!member) {
-        return interaction.reply({ content: '⚠️ Користувача не знайдено.', ephemeral: true });
-      }
-
-      await member.roles.add(ACCEPT_ROLE_ID).catch(console.error);
-      await interaction.reply({ content: `✅ Заявка <@${memberId}> прийнята. Гарної вам гри!`, ephemeral: false });
-      return;
-    }
-
-    if (interaction.customId.startsWith('deny_application_')) {
-      if (!ADMIN_IDS.includes(interaction.user.id)) {
-        return interaction.reply({ content: '❌ Тільки адміністрація.', ephemeral: true });
-      }
-
-      await interaction.reply({ content: '❌ Заявка відхилена. Канал закриється.', ephemeral: false });
-      setTimeout(() => {
-        interaction.channel?.delete().catch(console.error);
-      }, 5000);
-      return;
-    }
-
-    if (interaction.customId === 'close_ticket') {
-      await interaction.reply({ content: '✅ Тікет буде закрито через 5 сек.', ephemeral: true });
-      setTimeout(() => {
-        interaction.channel?.delete().catch(console.error);
-      }, 5000);
-      return;
-    }
-
-    // Створення тікету
-    const isApp = interaction.customId === 'create_application_ticket';
     const username = interaction.user.username.replace(/[^a-zA-Z0-9]/g, '-');
-    const existing = guild.channels.cache.find(c =>
-      c.name === (isApp ? `заявка-${username}` : `підтримка-${username}`)
-    );
-
-    if (existing) {
-      return interaction.reply({ content: `❌ У вас вже є відкритий/а ${isApp ? 'заявка' : 'тікет'}.`, ephemeral: true });
-    }
+    const existing = guild.channels.cache.find(c => c.name === `заявка-${username}`);
+    if (existing) return interaction.reply({ content: '❌ У вас вже є заявка.', ephemeral: true });
 
     const overwrites = [
-      {
-        id: guild.roles.everyone,
-        deny: [PermissionsBitField.Flags.ViewChannel]
-      },
-      {
-        id: interaction.user.id,
-        allow: [
-          PermissionsBitField.Flags.ViewChannel,
-          PermissionsBitField.Flags.SendMessages,
-          PermissionsBitField.Flags.ReadMessageHistory
-        ]
-      }
+      { id: guild.roles.everyone, deny: [PermissionsBitField.Flags.ViewChannel] },
+      { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ReadMessageHistory] }
     ];
-
     for (const adminId of ADMIN_IDS) {
       try {
         const admin = await guild.members.fetch(adminId);
-        overwrites.push({
-          id: admin.id,
-          allow: [
-            PermissionsBitField.Flags.ViewChannel,
-            PermissionsBitField.Flags.SendMessages,
-            PermissionsBitField.Flags.ReadMessageHistory
-          ]
-        });
-      } catch (err) {
-        console.warn(`⚠️ Не вдалося завантажити адміна ${adminId}`);
-      }
+        overwrites.push({ id: admin.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ReadMessageHistory] });
+      } catch {}
     }
 
     const channel = await guild.channels.create({
-      name: `${isApp ? 'заявка' : 'підтримка'}-${username}`,
-      type: 0,
+      name: `заявка-${username}`,
+      type: ChannelType.GuildText,
       permissionOverwrites: overwrites
     });
 
-    if (isApp) {
-      const embed = new EmbedBuilder()
-        .setTitle('✅ Заявку створено')
-        .setDescription("Форма подачі заявки:\n\nВік\nСекретне слово з правил\nЯк ви дізнались про наш проект?(Якщо гравець то нік)\n\nОчікуйте відповіді адміністратора.\nТільки адміністратор може прийняти або відхилити заявку.")
-        .setImage('https://cdn.discordapp.com/attachments/1390316873450782793/1392892451685142620/train_3.png?ex=68712faf&is=686fde2f&hm=a1849b8246f27c5f8869d26e781f9ff7360234cee63a52cbbbf0efc3569a77ca&')
-        .setColor(0xe29549)
-        .setFooter({ text: 'Cognia • Поринь у світ моду Create!' });
+    const embed = new EmbedBuilder()
+      .setTitle('✅ Заявка створена')
+      .setDescription(
+        `Вік: ${interaction.fields.getTextInputValue('age')}\n` +
+        `Секретне слово: ${interaction.fields.getTextInputValue('secret')}\n` +
+        `Як дізнались про проект: ${interaction.fields.getTextInputValue('how_know')}`
+      )
+      .setColor(0xe29549)
+      .setFooter({ text: 'Cognia • Подано на розгляд' });
 
-      const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId(`accept_application_${interaction.user.id}`)
-          .setLabel('✅ Прийняти')
-          .setStyle(ButtonStyle.Success),
-        new ButtonBuilder()
-          .setCustomId(`deny_application_${interaction.user.id}`)
-          .setLabel('❌ Відхилити')
-          .setStyle(ButtonStyle.Danger)
-      );
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`accept_application_${interaction.user.id}`)
+        .setLabel('✅ Прийняти')
+        .setStyle(ButtonStyle.Success),
+      new ButtonBuilder()
+        .setCustomId(`deny_application_${interaction.user.id}`)
+        .setLabel('❌ Відхилити')
+        .setStyle(ButtonStyle.Danger)
+    );
 
-      await channel.send({ content: `<@${interaction.user.id}>`, embeds: [embed], components: [row] });
-    } else {
-      const embed = new EmbedBuilder()
-        .setTitle('🔧 Підтримка')
-        .setDescription('Опишіть вашу проблему нижче.\n⚠️ Будь ласка, не закривайте тікет')
-        .setImage('https://cdn.discordapp.com/attachments/1390316873450782793/1390336690303930378/2023-08-30_15.20.02.png')
-        .setColor(0xe29549)
-        .setFooter({ text: 'Cognia • Підтримка' });
+    await channel.send({ content: `<@${interaction.user.id}>`, embeds: [embed], components: [row] });
+    await interaction.reply({ content: '✅ Заявка створена!', ephemeral: true });
+  }
 
-      const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId('close_ticket')
-          .setLabel("❌ Закрити (Видалити)")
-          .setStyle(ButtonStyle.Danger)
-      );
+  // --------------------
+  // Прийняття заявки
+  // --------------------
+  if (interaction.isButton() && interaction.customId.startsWith('accept_application_')) {
+    if (!ADMIN_IDS.includes(interaction.user.id)) return interaction.reply({ content: '❌ Тільки адміністрація.', ephemeral: true });
 
-      await channel.send({ content: `<@${interaction.user.id}>`, embeds: [embed], components: [row] });
+    const memberId = interaction.customId.split('_').pop();
+    const member = await interaction.guild.members.fetch(memberId).catch(() => null);
+    if (!member) return interaction.reply({ content: '⚠️ Користувача не знайдено.', ephemeral: true });
+
+    await member.roles.add(ACCEPT_ROLE_ID).catch(console.error);
+    await interaction.reply({ content: `✅ Заявка <@${memberId}> прийнята!`, ephemeral: false });
+
+    // Перемістити канал у категорію
+    if (interaction.channel && APPLICATION_CATEGORY_ID) {
+      await interaction.channel.setParent(APPLICATION_CATEGORY_ID).catch(console.error);
     }
 
-    await interaction.reply({ content: `✅ ${isApp ? 'Заявка' : 'Тікет'} створено: ${channel}`, ephemeral: true });
+    // Додати в Minecraft whitelist через RCON
+    try {
+      const rcon = await Rcon.connect(RCON_CONFIG);
+      const mcName = member.user.username; // можеш змінити на інший нік з форми, якщо треба
+      await rcon.send(`whitelist add ${mcName}`);
+      await rcon.end();
+      await interaction.channel.send(`✅ <@${memberId}> доданий у вайтліст сервера!`);
+    } catch (err) {
+      console.error('❌ Не вдалося додати в whitelist:', err);
+      await interaction.channel.send('⚠️ Сталася помилка при додаванні в whitelist!');
+    }
+
+    // Автоматичне видалення каналу через 5 хв
+    setTimeout(() => {
+      interaction.channel?.delete().catch(console.error);
+    }, 5 * 60 * 1000);
+  }
+
+  // --------------------
+  // Відхилення заявки
+  // --------------------
+  if (interaction.isButton() && interaction.customId.startsWith('deny_application_')) {
+    if (!ADMIN_IDS.includes(interaction.user.id)) return interaction.reply({ content: '❌ Тільки адміністрація.', ephemeral: true });
+
+    await interaction.reply({ content: '❌ Заявка відхилена. Канал буде видалено через 5 хв.', ephemeral: false });
+    setTimeout(() => {
+      interaction.channel?.delete().catch(console.error);
+    }, 5 * 60 * 1000);
   }
 });
 
-// Slash команда
+// --------------------
+// Slash команда ticketsetup
+// --------------------
 const commands = [
   new SlashCommandBuilder()
     .setName('ticketsetup')
@@ -237,16 +211,21 @@ const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
   }
 })();
 
+// --------------------
 // Express для Render
+// --------------------
 const app = express();
 app.get('/', (req, res) => res.send('Bot is live!'));
 app.listen(3000, () => console.log('🌐 Web server активний'));
 
+// --------------------
+// Логін бота
+// --------------------
 client.login(process.env.DISCORD_TOKEN);
 
-import fetch from 'node-fetch';
-
-// Пінг себе кожні 5 хвилин
+// --------------------
+// KeepAlive на Render
+// --------------------
 setInterval(() => {
   fetch('https://discordbot-kmzu.onrender.com')
     .then(() => console.log('📶 KeepAlive ping sent'))
