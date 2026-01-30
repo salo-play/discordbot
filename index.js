@@ -16,6 +16,7 @@ import {
   InteractionType,
   ChannelType
 } from 'discord.js';
+
 import dotenv from 'dotenv';
 import express from 'express';
 import { Rcon } from 'rcon-client';
@@ -33,34 +34,42 @@ const client = new Client({
   partials: [Partials.Channel]
 });
 
-const ADMIN_IDS = ['845277573654380555', '1054470308112900126'];
-const APPLICATION_CHANNEL_ID = '1390301425984081960';
-const SUPPORT_CHANNEL_ID = '1390325195935584296';
-const ACCEPT_ROLE_ID = '1390325276159770786';
-const APPLICATION_CATEGORY_ID = '1466868416014192781';
+// ================== CONFIG ==================
 
-// RCON налаштування
+const ADMIN_IDS = ['845277573654380555', '1054470308112900126'];
+
+const APPLICATION_CHANNEL_ID = '1390301425984081960';
+const APPLICATION_CATEGORY_ID = '1466868416014192781';
+const ACCEPT_ROLE_ID = '1390325276159770786';
+
 const RCON_CONFIG = {
-  host: 'remote-pattern.gl.joinmc.link', // постав свій IP
+  host: 'remote-pattern.gl.joinmc.link',
   port: 25575,
   password: process.env.RCON_PASSWORD
 };
 
+// ================== READY ==================
+
 client.once('ready', () => {
-  console.log(`🔗 Logged in as ${client.user.tag}`);
+  console.log(`✅ Logged in as ${client.user.tag}`);
 });
 
-// Обробка кнопок та модалок
+// ================== INTERACTIONS ==================
+
 client.on('interactionCreate', async interaction => {
   if (!interaction.isButton() && !interaction.isModalSubmit()) return;
 
-  // --------------------
-  // Кнопка подати заявку
-  // --------------------
+  // ---------- CREATE APPLICATION ----------
   if (interaction.isButton() && interaction.customId === 'create_application_ticket') {
     const modal = new ModalBuilder()
       .setCustomId('application_form')
-      .setTitle('Форма заявки на сервер Cognia');
+      .setTitle('Заявка на сервер Cognia');
+
+    const mcNickInput = new TextInputBuilder()
+      .setCustomId('mc_nick')
+      .setLabel('Minecraft нік')
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true);
 
     const ageInput = new TextInputBuilder()
       .setCustomId('age')
@@ -81,6 +90,7 @@ client.on('interactionCreate', async interaction => {
       .setRequired(true);
 
     modal.addComponents(
+      new ActionRowBuilder().addComponents(mcNickInput),
       new ActionRowBuilder().addComponents(ageInput),
       new ActionRowBuilder().addComponents(secretInput),
       new ActionRowBuilder().addComponents(knowInput)
@@ -89,45 +99,54 @@ client.on('interactionCreate', async interaction => {
     return interaction.showModal(modal);
   }
 
-  // --------------------
-  // Заповнена форма заявки
-  // --------------------
+  // ---------- FORM SUBMIT ----------
   if (interaction.type === InteractionType.ModalSubmit && interaction.customId === 'application_form') {
     const guild = interaction.guild;
     if (!guild) return;
 
+    const mcNick = interaction.fields.getTextInputValue('mc_nick').trim();
+
+    if (!/^[a-zA-Z0-9_]{3,16}$/.test(mcNick)) {
+      return interaction.reply({ content: '❌ Невірний Minecraft-нік', ephemeral: true });
+    }
+
     const username = interaction.user.username.replace(/[^a-zA-Z0-9]/g, '-');
     const existing = guild.channels.cache.find(c => c.name === `заявка-${username}`);
-    if (existing) return interaction.reply({ content: '❌ У вас вже є заявка.', ephemeral: true });
+    if (existing) {
+      return interaction.reply({ content: '❌ У вас вже є заявка.', ephemeral: true });
+    }
 
     const overwrites = [
       { id: guild.roles.everyone, deny: [PermissionsBitField.Flags.ViewChannel] },
-      { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ReadMessageHistory] }
+      { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
     ];
+
     for (const adminId of ADMIN_IDS) {
       try {
         const admin = await guild.members.fetch(adminId);
-        overwrites.push({ id: admin.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ReadMessageHistory] });
+        overwrites.push({ id: admin.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] });
       } catch {}
     }
 
     const channel = await guild.channels.create({
       name: `заявка-${username}`,
       type: ChannelType.GuildText,
+      parent: APPLICATION_CATEGORY_ID,
+      topic: `MC_NICK:${mcNick}`,
       permissionOverwrites: overwrites
     });
 
     const embed = new EmbedBuilder()
-      .setTitle('✅ Заявка створена')
-      .setDescription(
-        `Вік: ${interaction.fields.getTextInputValue('age')}\n` +
-        `Секретне слово: ${interaction.fields.getTextInputValue('secret')}\n` +
-        `Як дізнались про проект: ${interaction.fields.getTextInputValue('how_know')}`
-      )
+      .setTitle('📨 Нова заявка')
       .setColor(0xe29549)
-      .setFooter({ text: 'Cognia • Подано на розгляд' });
+      .setDescription(
+        `**Minecraft нік:** ${mcNick}\n` +
+        `**Вік:** ${interaction.fields.getTextInputValue('age')}\n` +
+        `**Секретне слово:** ${interaction.fields.getTextInputValue('secret')}\n` +
+        `**Як дізнались:** ${interaction.fields.getTextInputValue('how_know')}`
+      );
 
-    const row = new ActionRowBuilder().addComponents(
+    const buttons = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`accept_application_${interaction.user.id}`)
         .setLabel('✅ Прийняти')
@@ -138,96 +157,80 @@ client.on('interactionCreate', async interaction => {
         .setStyle(ButtonStyle.Danger)
     );
 
-    await channel.send({ content: `<@${interaction.user.id}>`, embeds: [embed], components: [row] });
+    await channel.send({ content: `<@${interaction.user.id}>`, embeds: [embed], components: [buttons] });
     await interaction.reply({ content: '✅ Заявка створена!', ephemeral: true });
   }
 
-  // --------------------
-  // Прийняття заявки
-  // --------------------
+  // ---------- ACCEPT ----------
   if (interaction.isButton() && interaction.customId.startsWith('accept_application_')) {
-    if (!ADMIN_IDS.includes(interaction.user.id)) return interaction.reply({ content: '❌ Тільки адміністрація.', ephemeral: true });
-
-    const memberId = interaction.customId.split('_').pop();
-    const member = await interaction.guild.members.fetch(memberId).catch(() => null);
-    if (!member) return interaction.reply({ content: '⚠️ Користувача не знайдено.', ephemeral: true });
-
-    await member.roles.add(ACCEPT_ROLE_ID).catch(console.error);
-    await interaction.reply({ content: `✅ Заявка <@${memberId}> прийнята!`, ephemeral: false });
-
-    // Перемістити канал у категорію
-    if (interaction.channel && APPLICATION_CATEGORY_ID) {
-      await interaction.channel.setParent(APPLICATION_CATEGORY_ID).catch(console.error);
+    if (!ADMIN_IDS.includes(interaction.user.id)) {
+      return interaction.reply({ content: '❌ Тільки адміністрація.', ephemeral: true });
     }
 
-    // Додати в Minecraft whitelist через RCON
+    const topic = interaction.channel.topic;
+    const mcNick = topic?.startsWith('MC_NICK:') ? topic.split(':')[1] : null;
+
+    if (!mcNick) {
+      return interaction.reply({ content: '⚠️ Не знайдено Minecraft-нік.', ephemeral: true });
+    }
+
     try {
       const rcon = await Rcon.connect(RCON_CONFIG);
-      const mcName = member.user.username; // можеш змінити на інший нік з форми, якщо треба
-      await rcon.send(`whitelist add ${mcName}`);
+      await rcon.send(`whitelist add ${mcNick}`);
       await rcon.end();
-      await interaction.channel.send(`✅ <@${memberId}> доданий у вайтліст сервера!`);
+
+      await interaction.reply(`✅ **${mcNick}** додано в whitelist`);
     } catch (err) {
-      console.error('❌ Не вдалося додати в whitelist:', err);
-      await interaction.channel.send('⚠️ Сталася помилка при додаванні в whitelist!');
+      console.error(err);
+      await interaction.reply('❌ Помилка RCON');
+      return;
     }
 
-    // Автоматичне видалення каналу через 5 хв
     setTimeout(() => {
-      interaction.channel?.delete().catch(console.error);
+      interaction.channel?.delete().catch(() => {});
     }, 5 * 60 * 1000);
   }
 
-  // --------------------
-  // Відхилення заявки
-  // --------------------
+  // ---------- DENY ----------
   if (interaction.isButton() && interaction.customId.startsWith('deny_application_')) {
-    if (!ADMIN_IDS.includes(interaction.user.id)) return interaction.reply({ content: '❌ Тільки адміністрація.', ephemeral: true });
+    if (!ADMIN_IDS.includes(interaction.user.id)) {
+      return interaction.reply({ content: '❌ Тільки адміністрація.', ephemeral: true });
+    }
 
-    await interaction.reply({ content: '❌ Заявка відхилена. Канал буде видалено через 5 хв.', ephemeral: false });
+    await interaction.reply('❌ Заявку відхилено. Канал буде видалено через 5 хв.');
     setTimeout(() => {
-      interaction.channel?.delete().catch(console.error);
+      interaction.channel?.delete().catch(() => {});
     }, 5 * 60 * 1000);
   }
 });
 
-// --------------------
-// Slash команда ticketsetup
-// --------------------
+// ================== SLASH ==================
+
 const commands = [
   new SlashCommandBuilder()
     .setName('ticketsetup')
-    .setDescription('Надіслати кнопки заявок/підтримки')
-].map(cmd => cmd.toJSON());
+    .setDescription('Надіслати кнопку створення заявки')
+].map(c => c.toJSON());
 
 const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
-(async () => {
-  try {
-    console.log('🔄 Реєстрація команд...');
-    await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), { body: commands });
-    console.log('✅ Команди зареєстровано');
-  } catch (err) {
-    console.error('❌ Помилка реєстрації команд:', err);
-  }
-})();
 
-// --------------------
-// Express для Render
-// --------------------
+await rest.put(
+  Routes.applicationCommands(process.env.CLIENT_ID),
+  { body: commands }
+);
+
+// ================== EXPRESS ==================
+
 const app = express();
-app.get('/', (req, res) => res.send('Bot is live!'));
-app.listen(3000, () => console.log('🌐 Web server активний'));
+app.get('/', (_, res) => res.send('Bot alive'));
+app.listen(3000);
 
-// --------------------
-// Логін бота
-// --------------------
+// ================== LOGIN ==================
+
 client.login(process.env.DISCORD_TOKEN);
 
-// --------------------
-// KeepAlive на Render
-// --------------------
+// ================== KEEP ALIVE ==================
+
 setInterval(() => {
-  fetch('https://discordbot-kmzu.onrender.com')
-    .then(() => console.log('📶 KeepAlive ping sent'))
-    .catch(err => console.warn('⚠️ KeepAlive error', err));
+  fetch('https://discordbot-kmzu.onrender.com').catch(() => {});
 }, 5 * 60 * 1000);
