@@ -41,7 +41,7 @@ const APPLICATION_CATEGORY_ID = '1466868416014192781';
 
 // RCON налаштування
 const RCON_CONFIG = {
-  host: 'IP_СЕРВЕРА', // постав свій IP
+  host: 'remote-pattern.gl.joinmc.link', // постав свій IP
   port: 25575,
   password: process.env.RCON_PASSWORD
 };
