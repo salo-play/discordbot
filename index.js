@@ -19,9 +19,10 @@ import {
 import dotenv from 'dotenv';
 import express from 'express';
 import { Rcon } from 'rcon-client';
-import fetch from 'node-fetch';
 
 dotenv.config();
+
+// ================== CLIENT ==================
 
 const client = new Client({
   intents: [
@@ -36,9 +37,7 @@ const client = new Client({
 // ================== CONFIG ==================
 
 const ADMIN_IDS = ['845277573654380555', '1054470308112900126'];
-const APPLICATION_CHANNEL_ID = '1390301425984081960';
 const APPLICATION_CATEGORY_ID = '1466868416014192781';
-const ACCEPT_ROLE_ID = '1390325276159770786';
 
 const RCON_CONFIG = {
   host: 'remote-pattern.gl.joinmc.link',
@@ -55,174 +54,187 @@ client.once('ready', () => {
 // ================== INTERACTIONS ==================
 
 client.on('interactionCreate', async interaction => {
-  if (!interaction.isButton() && !interaction.isModalSubmit()) return;
 
-  // ---------- CREATE APPLICATION ----------
-  if (interaction.isButton() && interaction.customId === 'create_application_ticket') {
-    const modal = new ModalBuilder()
-      .setCustomId('application_form')
-      .setTitle('Заявка на сервер Cognia');
+  // ---------- SLASH /ticketsetup ----------
+  if (interaction.isChatInputCommand()) {
+    if (interaction.commandName === 'ticketsetup') {
 
-    const mcNickInput = new TextInputBuilder()
-      .setCustomId('mc_nick')
-      .setLabel('Minecraft нік')
-      .setStyle(TextInputStyle.Short)
-      .setRequired(true);
+      const embed = new EmbedBuilder()
+        .setTitle('📩 Подати заявку')
+        .setColor(0xe29549)
+        .setDescription(
+          'Натисніть кнопку нижче, щоб створити заявку на сервер **Cognia**.\n\n' +
+          '⚠️ **Одна заявка на користувача**'
+        );
 
-    const ageInput = new TextInputBuilder()
-      .setCustomId('age')
-      .setLabel('Вік')
-      .setStyle(TextInputStyle.Short)
-      .setRequired(true);
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId('create_application_ticket')
+          .setLabel('➕ Створити заявку')
+          .setStyle(ButtonStyle.Primary)
+      );
 
-    const secretInput = new TextInputBuilder()
-      .setCustomId('secret')
-      .setLabel('Секретне слово з правил')
-      .setStyle(TextInputStyle.Short)
-      .setRequired(true);
+      await interaction.reply({
+        embeds: [embed],
+        components: [row]
+      });
 
-    const knowInput = new TextInputBuilder()
-      .setCustomId('how_know')
-      .setLabel('Як дізнались про проект?')
-      .setStyle(TextInputStyle.Paragraph)
-      .setRequired(true);
-
-    modal.addComponents(
-      new ActionRowBuilder().addComponents(mcNickInput),
-      new ActionRowBuilder().addComponents(ageInput),
-      new ActionRowBuilder().addComponents(secretInput),
-      new ActionRowBuilder().addComponents(knowInput)
-    );
-
-    return interaction.showModal(modal);
+      return;
+    }
   }
 
-  // ---------- FORM SUBMIT ----------
+  // ---------- BUTTONS ----------
+  if (interaction.isButton()) {
+
+    // CREATE APPLICATION
+    if (interaction.customId === 'create_application_ticket') {
+      const modal = new ModalBuilder()
+        .setCustomId('application_form')
+        .setTitle('Заявка на сервер Cognia');
+
+      modal.addComponents(
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder()
+            .setCustomId('mc_nick')
+            .setLabel('Minecraft нік')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true)
+        ),
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder()
+            .setCustomId('age')
+            .setLabel('Вік')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true)
+        ),
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder()
+            .setCustomId('secret')
+            .setLabel('Секретне слово з правил')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true)
+        ),
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder()
+            .setCustomId('how_know')
+            .setLabel('Як дізнались про проект?')
+            .setStyle(TextInputStyle.Paragraph)
+            .setRequired(true)
+        )
+      );
+
+      await interaction.showModal(modal);
+      return;
+    }
+
+    // ACCEPT
+    if (interaction.customId.startsWith('accept_application_')) {
+      if (!ADMIN_IDS.includes(interaction.user.id)) {
+        return interaction.reply({ content: '❌ Тільки адміністрація.', ephemeral: true });
+      }
+
+      const mcNick = interaction.channel.topic?.split('MC_NICK:')[1];
+      if (!mcNick) {
+        return interaction.reply({ content: '⚠️ MC нік не знайдено.', ephemeral: true });
+      }
+
+      try {
+        const rcon = await Rcon.connect(RCON_CONFIG);
+        await rcon.send(`whitelist add ${mcNick}`);
+        await rcon.end();
+
+        await interaction.reply(`✅ **${mcNick}** додано в whitelist`);
+      } catch {
+        return interaction.reply('❌ Помилка RCON');
+      }
+
+      setTimeout(() => interaction.channel.delete().catch(() => {}), 5 * 60 * 1000);
+    }
+
+    // DENY
+    if (interaction.customId.startsWith('deny_application_')) {
+      if (!ADMIN_IDS.includes(interaction.user.id)) {
+        return interaction.reply({ content: '❌ Тільки адміністрація.', ephemeral: true });
+      }
+
+      await interaction.reply('❌ Заявку відхилено. Канал буде видалено через 5 хв.');
+      setTimeout(() => interaction.channel.delete().catch(() => {}), 5 * 60 * 1000);
+    }
+  }
+
+  // ---------- MODAL SUBMIT ----------
   if (interaction.type === InteractionType.ModalSubmit && interaction.customId === 'application_form') {
+
     const guild = interaction.guild;
     if (!guild) return;
 
     const mcNick = interaction.fields.getTextInputValue('mc_nick').trim();
-
     if (!/^[a-zA-Z0-9_]{3,16}$/.test(mcNick)) {
       return interaction.reply({ content: '❌ Невірний Minecraft-нік', ephemeral: true });
     }
 
     const username = interaction.user.username.replace(/[^a-zA-Z0-9]/g, '-');
-    const existing = guild.channels.cache.find(c => c.name === `заявка-${username}`);
-    if (existing) {
+    if (guild.channels.cache.find(c => c.name === `заявка-${username}`)) {
       return interaction.reply({ content: '❌ У вас вже є заявка.', ephemeral: true });
     }
 
     const overwrites = [
-      { id: guild.roles.everyone, deny: [PermissionsBitField.Flags.ViewChannel] },
+      { id: guild.roles.everyone.id, deny: [PermissionsBitField.Flags.ViewChannel] },
       { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
     ];
 
     for (const adminId of ADMIN_IDS) {
-      try {
-        const admin = await guild.members.fetch(adminId);
-        overwrites.push({ id: admin.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] });
-      } catch {}
+      overwrites.push({
+        id: adminId,
+        allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages]
+      });
     }
 
-    try {
-      // Створюємо канал
-      const channel = await guild.channels.create({
-        name: `заявка-${username}`,
-        type: ChannelType.GuildText,
-        parent: APPLICATION_CATEGORY_ID,
-        topic: `MC_NICK:${mcNick}`,
-        permissionOverwrites: overwrites
-      });
+    const channel = await guild.channels.create({
+      name: `заявка-${username}`,
+      type: ChannelType.GuildText,
+      parent: APPLICATION_CATEGORY_ID,
+      topic: `MC_NICK:${mcNick}`,
+      permissionOverwrites: overwrites
+    });
 
-      console.log('Channel created:', channel.name); // Лог для перевірки створення каналу
-
-      const embed = new EmbedBuilder()
-        .setTitle('📨 Нова заявка')
-        .setColor(0xe29549)
-        .setDescription(
-          `**Minecraft нік:** ${mcNick}\n` +
-          `**Вік:** ${interaction.fields.getTextInputValue('age')}\n` +
-          `**Секретне слово:** ${interaction.fields.getTextInputValue('secret')}\n` +
-          `**Як дізнались:** ${interaction.fields.getTextInputValue('how_know')}`
-        );
-
-      const buttons = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId(`accept_application_${interaction.user.id}`)
-          .setLabel('✅ Прийняти')
-          .setStyle(ButtonStyle.Success),
-        new ButtonBuilder()
-          .setCustomId(`deny_application_${interaction.user.id}`)
-          .setLabel('❌ Відхилити')
-          .setStyle(ButtonStyle.Danger)
+    const embed = new EmbedBuilder()
+      .setTitle('📨 Нова заявка')
+      .setColor(0xe29549)
+      .setDescription(
+        `**Minecraft нік:** ${mcNick}\n` +
+        `**Вік:** ${interaction.fields.getTextInputValue('age')}\n` +
+        `**Секретне слово:** ${interaction.fields.getTextInputValue('secret')}\n` +
+        `**Як дізнались:** ${interaction.fields.getTextInputValue('how_know')}`
       );
 
-      // Перевірка чи канал існує і надсилаємо повідомлення
-      if (channel && channel.isText()) {
-        await channel.send({ content: `<@${interaction.user.id}>`, embeds: [embed], components: [buttons] });
-        console.log('Message sent to channel:', channel.name); // Лог після успішного відправлення
-      } else {
-        console.error('Не вдалося знайти або створити канал.');
-      }
+    const buttons = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`accept_application_${interaction.user.id}`)
+        .setLabel('✅ Прийняти')
+        .setStyle(ButtonStyle.Success),
+      new ButtonBuilder()
+        .setCustomId(`deny_application_${interaction.user.id}`)
+        .setLabel('❌ Відхилити')
+        .setStyle(ButtonStyle.Danger)
+    );
 
-      await interaction.reply({ content: '✅ Заявка створена!', ephemeral: true });
-    } catch (error) {
-      console.error('Error creating channel or sending message:', error);
-      await interaction.reply({ content: '❌ Помилка при створенні каналу або відправленні повідомлення.', ephemeral: true });
-    }
-  }
+    await channel.send({
+      content: `<@${interaction.user.id}>`,
+      embeds: [embed],
+      components: [buttons]
+    });
 
-  // ---------- ACCEPT ----------
-  if (interaction.isButton() && interaction.customId.startsWith('accept_application_')) {
-    if (!ADMIN_IDS.includes(interaction.user.id)) {
-      return interaction.reply({ content: '❌ Тільки адміністрація.', ephemeral: true });
-    }
-
-    const topic = interaction.channel.topic;
-    const mcNick = topic?.startsWith('MC_NICK:') ? topic.split(':')[1] : null;
-
-    if (!mcNick) {
-      return interaction.reply({ content: '⚠️ Не знайдено Minecraft-нік.', ephemeral: true });
-    }
-
-    try {
-      const rcon = await Rcon.connect(RCON_CONFIG);
-      await rcon.send(`whitelist add ${mcNick}`);
-      await rcon.end();
-
-      await interaction.reply(`✅ **${mcNick}** додано в whitelist`);
-    } catch (err) {
-      console.error(err);
-      await interaction.reply('❌ Помилка RCON');
-      return;
-    }
-
-    setTimeout(() => {
-      interaction.channel?.delete().catch(() => {});
-    }, 5 * 60 * 1000);
-  }
-
-  // ---------- DENY ----------
-  if (interaction.isButton() && interaction.customId.startsWith('deny_application_')) {
-    if (!ADMIN_IDS.includes(interaction.user.id)) {
-      return interaction.reply({ content: '❌ Тільки адміністрація.', ephemeral: true });
-    }
-
-    await interaction.reply('❌ Заявку відхилено. Канал буде видалено через 5 хв.');
-    setTimeout(() => {
-      interaction.channel?.delete().catch(() => {});
-    }, 5 * 60 * 1000);
+    await interaction.reply({ content: '✅ Заявка створена!', ephemeral: true });
   }
 });
 
-// ================== SLASH ==================
+// ================== SLASH REGISTER ==================
 
 const commands = [
   new SlashCommandBuilder()
     .setName('ticketsetup')
-    .setDescription('Надіслати ембед з кнопкою для створення заявки')
+    .setDescription('Надіслати ембед створення заявки')
 ].map(c => c.toJSON());
 
 const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
@@ -238,4 +250,6 @@ const app = express();
 app.get('/', (_, res) => res.send('Bot alive'));
 app.listen(3000);
 
-// =================
+// ================== LOGIN ==================
+
+client.login(process.env.DISCORD_TOKEN);
