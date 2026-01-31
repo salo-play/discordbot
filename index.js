@@ -38,7 +38,7 @@ const client = new Client({
 // ================== CONFIG ==================
 
 const ADMIN_IDS = ['845277573654380555', '1054470308112900126'];
-const APPLICATION_CATEGORY_ID = '1466868416014192781';
+const APPLICATION_CATEGORY_ID = '1467273330662047808';
 
 const RCON_CONFIG = {
   host: 'remote-pattern.gl.joinmc.link',
