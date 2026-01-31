@@ -16,7 +16,6 @@ import {
   InteractionType,
   ChannelType
 } from 'discord.js';
-
 import dotenv from 'dotenv';
 import express from 'express';
 import { Rcon } from 'rcon-client';
@@ -24,7 +23,6 @@ import { Rcon } from 'rcon-client';
 dotenv.config();
 
 // ================== CLIENT ==================
-
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -36,9 +34,8 @@ const client = new Client({
 });
 
 // ================== CONFIG ==================
-
 const ADMIN_IDS = ['845277573654380555', '1054470308112900126'];
-const APPLICATION_CATEGORY_ID = '1467273330662047808';
+const APPLICATION_CATEGORY_ID = '1466868416014192781';
 
 const RCON_CONFIG = {
   host: 'remote-pattern.gl.joinmc.link',
@@ -46,72 +43,40 @@ const RCON_CONFIG = {
   password: process.env.RCON_PASSWORD
 };
 
-// ================== SLASH COMMANDS ==================
-
-const commands = [
-  new SlashCommandBuilder()
-    .setName('ticketsetup')
-    .setDescription('Надіслати ембед створення заявки')
-].map(c => c.toJSON());
-
 // ================== READY ==================
-
-client.once('ready', async () => {
+client.once('ready', () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
-
-  if (!process.env.DISCORD_TOKEN || !process.env.CLIENT_ID) {
-    console.error('❌ Missing DISCORD_TOKEN or CLIENT_ID');
-    return;
-  }
-
-  const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
-
-  try {
-    await rest.put(
-      Routes.applicationCommands(process.env.CLIENT_ID),
-      { body: commands }
-    );
-    console.log('✅ Slash commands registered');
-  } catch (err) {
-    console.error('❌ Slash command register error:', err);
-  }
 });
 
 // ================== INTERACTIONS ==================
-
 client.on('interactionCreate', async interaction => {
 
-  // ---------- SLASH ----------
-  if (interaction.isChatInputCommand()) {
-    if (interaction.commandName === 'ticketsetup') {
+  // ---------- SLASH /ticketsetup ----------
+  if (interaction.isChatInputCommand() && interaction.commandName === 'ticketsetup') {
 
-      const embed = new EmbedBuilder()
-        .setTitle('📩 Подати заявку')
-        .setColor(0xe29549)
-        .setDescription(
-          'Натисніть кнопку нижче, щоб створити заявку на сервер **Cognia**.\n\n' +
-          '⚠️ **Одна заявка на користувача**'
-        );
-
-      const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId('create_application_ticket')
-          .setLabel('➕ Створити заявку')
-          .setStyle(ButtonStyle.Primary)
+    const embed = new EmbedBuilder()
+      .setTitle('📩 Подати заявку')
+      .setColor(0xe29549)
+      .setDescription(
+        'Натисніть кнопку нижче, щоб створити заявку на сервер **Cognia**.\n\n' +
+        '⚠️ **Одна заявка на користувача**'
       );
 
-      await interaction.reply({
-        embeds: [embed],
-        components: [row]
-      });
-    }
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId('create_application_ticket')
+        .setLabel('➕ Створити заявку')
+        .setStyle(ButtonStyle.Primary)
+    );
+
+    await interaction.reply({ embeds: [embed], components: [row] });
     return;
   }
 
   // ---------- BUTTONS ----------
   if (interaction.isButton()) {
 
-    // CREATE
+    // CREATE APPLICATION
     if (interaction.customId === 'create_application_ticket') {
       const modal = new ModalBuilder()
         .setCustomId('application_form')
@@ -152,22 +117,19 @@ client.on('interactionCreate', async interaction => {
       return;
     }
 
-    // ACCEPT
+    // ACCEPT APPLICATION
     if (interaction.customId.startsWith('accept_application_')) {
       if (!ADMIN_IDS.includes(interaction.user.id)) {
         return interaction.reply({ content: '❌ Тільки адміністрація.', ephemeral: true });
       }
 
       const mcNick = interaction.channel.topic?.replace('MC_NICK:', '');
-      if (!mcNick) {
-        return interaction.reply({ content: '⚠️ MC нік не знайдено.', ephemeral: true });
-      }
+      if (!mcNick) return interaction.reply({ content: '⚠️ MC нік не знайдено.', ephemeral: true });
 
       try {
         const rcon = await Rcon.connect(RCON_CONFIG);
         await rcon.send(`whitelist add ${mcNick}`);
         await rcon.end();
-
         await interaction.reply(`✅ **${mcNick}** додано в whitelist`);
       } catch (e) {
         console.error(e);
@@ -178,7 +140,7 @@ client.on('interactionCreate', async interaction => {
       return;
     }
 
-    // DENY
+    // DENY APPLICATION
     if (interaction.customId.startsWith('deny_application_')) {
       if (!ADMIN_IDS.includes(interaction.user.id)) {
         return interaction.reply({ content: '❌ Тільки адміністрація.', ephemeral: true });
@@ -190,52 +152,39 @@ client.on('interactionCreate', async interaction => {
     }
   }
 
-  // ---------- MODAL ----------
-  if (
-    interaction.type === InteractionType.ModalSubmit &&
-    interaction.customId === 'application_form'
-  ) {
+  // ---------- MODAL SUBMIT ----------
+  if (interaction.type === InteractionType.ModalSubmit && interaction.customId === 'application_form') {
 
     const guild = interaction.guild;
-    if (!guild) {
-      return interaction.reply({ content: '❌ Guild not found', ephemeral: true });
-    }
+    if (!guild) return;
 
     const mcNick = interaction.fields.getTextInputValue('mc_nick').trim();
     if (!/^[a-zA-Z0-9_]{3,16}$/.test(mcNick)) {
       return interaction.reply({ content: '❌ Невірний Minecraft-нік', ephemeral: true });
     }
 
-    const username = interaction.user.username
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, '-')
-      .slice(0, 20);
-
+    const username = interaction.user.username.replace(/[^a-zA-Z0-9]/g, '-');
     if (guild.channels.cache.find(c => c.name === `заявка-${username}`)) {
       return interaction.reply({ content: '❌ У вас вже є заявка.', ephemeral: true });
     }
 
+    // ================= PERMISSIONS =================
     const overwrites = [
-      {
-        id: guild.roles.everyone.id,
-        deny: [PermissionsBitField.Flags.ViewChannel]
-      },
-      {
-        id: interaction.user.id,
-        allow: [
-          PermissionsBitField.Flags.ViewChannel,
-          PermissionsBitField.Flags.SendMessages
-        ]
-      },
-      ...ADMIN_IDS.map(id => ({
-        id,
-        allow: [
-          PermissionsBitField.Flags.ViewChannel,
-          PermissionsBitField.Flags.SendMessages
-        ]
-      }))
+      { id: guild.roles.everyone, deny: [PermissionsBitField.Flags.ViewChannel] },
+      { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
     ];
 
+    for (const adminId of ADMIN_IDS) {
+      const member = await guild.members.fetch(adminId).catch(() => null);
+      if (member) {
+        overwrites.push({
+          id: member,
+          allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages]
+        });
+      }
+    }
+
+    // ================= CREATE CHANNEL =================
     const channel = await guild.channels.create({
       name: `заявка-${username}`,
       type: ChannelType.GuildText,
@@ -265,25 +214,32 @@ client.on('interactionCreate', async interaction => {
         .setStyle(ButtonStyle.Danger)
     );
 
-    await channel.send({
-      content: `<@${interaction.user.id}>`,
-      embeds: [embed],
-      components: [buttons]
-    });
+    if (channel.isTextBased()) {
+      await channel.send({ content: `<@${interaction.user.id}>`, embeds: [embed], components: [buttons] });
+    }
 
-    await interaction.reply({
-      content: '✅ Заявка створена!',
-      ephemeral: true
-    });
+    await interaction.reply({ content: '✅ Заявка створена!', ephemeral: true });
   }
 });
 
-// ================== EXPRESS ==================
+// ================== SLASH REGISTER ==================
+const commands = [
+  new SlashCommandBuilder()
+    .setName('ticketsetup')
+    .setDescription('Надіслати ембед створення заявки')
+].map(c => c.toJSON());
 
+const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+
+await rest.put(
+  Routes.applicationCommands(process.env.CLIENT_ID),
+  { body: commands }
+);
+
+// ================== EXPRESS ==================
 const app = express();
 app.get('/', (_, res) => res.send('Bot alive'));
 app.listen(3000);
 
 // ================== LOGIN ==================
-
 client.login(process.env.DISCORD_TOKEN);
