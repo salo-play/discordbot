@@ -16,6 +16,7 @@ import {
   InteractionType,
   ChannelType
 } from 'discord.js';
+
 import dotenv from 'dotenv';
 import express from 'express';
 import { Rcon } from 'rcon-client';
@@ -28,7 +29,6 @@ const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMembers
   ],
   partials: [Partials.Channel]
@@ -55,38 +55,31 @@ client.once('ready', () => {
 
 client.on('interactionCreate', async interaction => {
 
-  // ---------- SLASH /ticketsetup ----------
-  if (interaction.isChatInputCommand()) {
-    if (interaction.commandName === 'ticketsetup') {
+  // ---------- SLASH ----------
+  if (interaction.isChatInputCommand() && interaction.commandName === 'ticketsetup') {
 
-      const embed = new EmbedBuilder()
-        .setTitle('📩 Подати заявку')
-        .setColor(0xe29549)
-        .setDescription(
-          'Натисніть кнопку нижче, щоб створити заявку на сервер **Cognia**.\n\n' +
-          '⚠️ **Одна заявка на користувача**'
-        );
-
-      const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId('create_application_ticket')
-          .setLabel('➕ Створити заявку')
-          .setStyle(ButtonStyle.Primary)
+    const embed = new EmbedBuilder()
+      .setTitle('📩 Подати заявку')
+      .setColor(0xe29549)
+      .setDescription(
+        'Натисніть кнопку нижче, щоб створити заявку на сервер **Cognia**.\n\n' +
+        '⚠️ **Одна заявка на користувача**'
       );
 
-      await interaction.reply({
-        embeds: [embed],
-        components: [row]
-      });
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId('create_application_ticket')
+        .setLabel('➕ Створити заявку')
+        .setStyle(ButtonStyle.Primary)
+    );
 
-      return;
-    }
+    await interaction.reply({ embeds: [embed], components: [row] });
+    return;
   }
 
-  // ---------- BUTTONS ----------
+  // ---------- BUTTON ----------
   if (interaction.isButton()) {
 
-    // CREATE APPLICATION
     if (interaction.customId === 'create_application_ticket') {
       const modal = new ModalBuilder()
         .setCustomId('application_form')
@@ -133,9 +126,9 @@ client.on('interactionCreate', async interaction => {
         return interaction.reply({ content: '❌ Тільки адміністрація.', ephemeral: true });
       }
 
-      const mcNick = interaction.channel.topic?.split('MC_NICK:')[1];
+      const mcNick = interaction.channel.topic?.replace('MC_NICK:', '');
       if (!mcNick) {
-        return interaction.reply({ content: '⚠️ MC нік не знайдено.', ephemeral: true });
+        return interaction.reply({ content: '❌ MC нік не знайдено.', ephemeral: true });
       }
 
       try {
@@ -144,7 +137,8 @@ client.on('interactionCreate', async interaction => {
         await rcon.end();
 
         await interaction.reply(`✅ **${mcNick}** додано в whitelist`);
-      } catch {
+      } catch (e) {
+        console.error(e);
         return interaction.reply('❌ Помилка RCON');
       }
 
@@ -165,67 +159,79 @@ client.on('interactionCreate', async interaction => {
   // ---------- MODAL SUBMIT ----------
   if (interaction.type === InteractionType.ModalSubmit && interaction.customId === 'application_form') {
 
-    const guild = interaction.guild;
-    if (!guild) return;
+    await interaction.deferReply({ ephemeral: true });
 
-    const mcNick = interaction.fields.getTextInputValue('mc_nick').trim();
-    if (!/^[a-zA-Z0-9_]{3,16}$/.test(mcNick)) {
-      return interaction.reply({ content: '❌ Невірний Minecraft-нік', ephemeral: true });
-    }
+    try {
+      const guild = interaction.guild;
+      if (!guild) return interaction.editReply('❌ Сервер не знайдено.');
 
-    const username = interaction.user.username.replace(/[^a-zA-Z0-9]/g, '-');
-    if (guild.channels.cache.find(c => c.name === `заявка-${username}`)) {
-      return interaction.reply({ content: '❌ У вас вже є заявка.', ephemeral: true });
-    }
+      const mcNick = interaction.fields.getTextInputValue('mc_nick').trim();
+      if (!/^[a-zA-Z0-9_]{3,16}$/.test(mcNick)) {
+        return interaction.editReply('❌ Невірний Minecraft-нік');
+      }
 
-    const overwrites = [
-      { id: guild.roles.everyone.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-      { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
-    ];
+      const username = interaction.user.username.replace(/[^a-zA-Z0-9]/g, '-');
+      if (guild.channels.cache.find(c => c.name === `заявка-${username}`)) {
+        return interaction.editReply('❌ У вас вже є заявка.');
+      }
 
-    for (const adminId of ADMIN_IDS) {
-      overwrites.push({
-        id: adminId,
-        allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages]
+      const category = guild.channels.cache.get(APPLICATION_CATEGORY_ID);
+      if (!category || category.type !== ChannelType.GuildCategory) {
+        return interaction.editReply('❌ Категорія заявок не знайдена.');
+      }
+
+      const overwrites = [
+        { id: guild.roles.everyone.id, deny: [PermissionsBitField.Flags.ViewChannel] },
+        { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
+      ];
+
+      for (const adminId of ADMIN_IDS) {
+        overwrites.push({
+          id: adminId,
+          allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages]
+        });
+      }
+
+      const channel = await guild.channels.create({
+        name: `заявка-${username}`,
+        type: ChannelType.GuildText,
+        parent: APPLICATION_CATEGORY_ID,
+        topic: `MC_NICK:${mcNick}`,
+        permissionOverwrites: overwrites
       });
-    }
 
-    const channel = await guild.channels.create({
-      name: `заявка-${username}`,
-      type: ChannelType.GuildText,
-      parent: APPLICATION_CATEGORY_ID,
-      topic: `MC_NICK:${mcNick}`,
-      permissionOverwrites: overwrites
-    });
+      const embed = new EmbedBuilder()
+        .setTitle('📨 Нова заявка')
+        .setColor(0xe29549)
+        .setDescription(
+          `**Minecraft нік:** ${mcNick}\n` +
+          `**Вік:** ${interaction.fields.getTextInputValue('age')}\n` +
+          `**Секретне слово:** ${interaction.fields.getTextInputValue('secret')}\n` +
+          `**Як дізнались:** ${interaction.fields.getTextInputValue('how_know')}`
+        );
 
-    const embed = new EmbedBuilder()
-      .setTitle('📨 Нова заявка')
-      .setColor(0xe29549)
-      .setDescription(
-        `**Minecraft нік:** ${mcNick}\n` +
-        `**Вік:** ${interaction.fields.getTextInputValue('age')}\n` +
-        `**Секретне слово:** ${interaction.fields.getTextInputValue('secret')}\n` +
-        `**Як дізнались:** ${interaction.fields.getTextInputValue('how_know')}`
+      const buttons = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`accept_application_${interaction.user.id}`)
+          .setLabel('✅ Прийняти')
+          .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+          .setCustomId(`deny_application_${interaction.user.id}`)
+          .setLabel('❌ Відхилити')
+          .setStyle(ButtonStyle.Danger)
       );
 
-    const buttons = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`accept_application_${interaction.user.id}`)
-        .setLabel('✅ Прийняти')
-        .setStyle(ButtonStyle.Success),
-      new ButtonBuilder()
-        .setCustomId(`deny_application_${interaction.user.id}`)
-        .setLabel('❌ Відхилити')
-        .setStyle(ButtonStyle.Danger)
-    );
+      await channel.send({
+        content: `<@${interaction.user.id}>`,
+        embeds: [embed],
+        components: [buttons]
+      });
 
-    await channel.send({
-      content: `<@${interaction.user.id}>`,
-      embeds: [embed],
-      components: [buttons]
-    });
-
-    await interaction.reply({ content: '✅ Заявка створена!', ephemeral: true });
+      await interaction.editReply('✅ Заявка створена!');
+    } catch (err) {
+      console.error('❌ MODAL ERROR:', err);
+      await interaction.editReply('❌ Помилка при створенні заявки.');
+    }
   }
 });
 
