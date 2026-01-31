@@ -2,178 +2,288 @@ import {
   Client,
   GatewayIntentBits,
   Partials,
-  SlashCommandBuilder,
-  Routes,
-  REST,
   EmbedBuilder,
-  ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
+  ActionRowBuilder,
+  PermissionsBitField,
+  REST,
+  Routes,
+  SlashCommandBuilder,
   ModalBuilder,
   TextInputBuilder,
   TextInputStyle,
-  PermissionFlagsBits,
+  InteractionType,
   ChannelType
 } from 'discord.js';
 
-const TOKEN = process.env.TOKEN;
-const CLIENT_ID = process.env.CLIENT_ID;
-const GUILD_ID = process.env.GUILD_ID;
+import dotenv from 'dotenv';
+import express from 'express';
+import { Rcon } from 'rcon-client';
 
-const STAFF_ROLE_ID = 'PUT_STAFF_ROLE_ID_HERE';
-const TICKET_CATEGORY_ID = 'PUT_CATEGORY_ID_HERE';
+dotenv.config();
+
+// ================== CLIENT ==================
 
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildMembers
   ],
   partials: [Partials.Channel]
 });
 
-/* ================= SLASH COMMAND REGISTER ================= */
+// ================== CONFIG ==================
+
+const ADMIN_IDS = ['845277573654380555', '1054470308112900126'];
+const APPLICATION_CATEGORY_ID = '1466868416014192781';
+
+const RCON_CONFIG = {
+  host: 'remote-pattern.gl.joinmc.link',
+  port: 25575,
+  password: process.env.RCON_PASSWORD
+};
+
+// ================== SLASH COMMANDS ==================
 
 const commands = [
   new SlashCommandBuilder()
     .setName('ticketsetup')
-    .setDescription('Надіслати панель створення заявки')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-    .toJSON()
-];
+    .setDescription('Надіслати ембед створення заявки')
+].map(c => c.toJSON());
 
-const rest = new REST({ version: '10' }).setToken(TOKEN);
+// ================== READY ==================
 
-await rest.put(
-  Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
-  { body: commands }
-);
-
-/* ================= READY ================= */
-
-client.once('ready', () => {
+client.once('ready', async () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
-});
 
-/* ================= INTERACTIONS ================= */
+  if (!process.env.DISCORD_TOKEN || !process.env.CLIENT_ID) {
+    console.error('❌ Missing DISCORD_TOKEN or CLIENT_ID');
+    return;
+  }
 
-client.on('interactionCreate', async interaction => {
+  const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+
   try {
-
-    /* ---------- /ticketsetup ---------- */
-    if (interaction.isChatInputCommand()) {
-      if (interaction.commandName !== 'ticketsetup') return;
-
-      const embed = new EmbedBuilder()
-        .setTitle('📩 Подати заявку')
-        .setDescription(
-          'Натисніть кнопку нижче, щоб створити заявку на сервер **Cognia**.\n\n' +
-          '⚠️ **Одна заявка на користувача**'
-        )
-        .setColor(0xe2a23d);
-
-      const button = new ButtonBuilder()
-        .setCustomId('ticket_create')
-        .setLabel('Створити заявку')
-        .setStyle(ButtonStyle.Primary);
-
-      await interaction.reply({
-        embeds: [embed],
-        components: [new ActionRowBuilder().addComponents(button)]
-      });
-    }
-
-    /* ---------- BUTTON ---------- */
-    if (interaction.isButton()) {
-      if (interaction.customId !== 'ticket_create') return;
-
-      const modal = new ModalBuilder()
-        .setCustomId('ticket_modal')
-        .setTitle('Заявка');
-
-      const name = new TextInputBuilder()
-        .setCustomId('name')
-        .setLabel('Ваше імʼя')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(true);
-
-      const reason = new TextInputBuilder()
-        .setCustomId('reason')
-        .setLabel('Причина заявки')
-        .setStyle(TextInputStyle.Paragraph)
-        .setRequired(true);
-
-      modal.addComponents(
-        new ActionRowBuilder().addComponents(name),
-        new ActionRowBuilder().addComponents(reason)
-      );
-
-      await interaction.showModal(modal);
-    }
-
-    /* ---------- MODAL SUBMIT ---------- */
-    if (interaction.isModalSubmit()) {
-      if (interaction.customId !== 'ticket_modal') return;
-
-      await interaction.deferReply({ ephemeral: true });
-
-      const name = interaction.fields.getTextInputValue('name');
-      const reason = interaction.fields.getTextInputValue('reason');
-
-      const channel = await interaction.guild.channels.create({
-        name: `ticket-${interaction.user.username}`,
-        type: ChannelType.GuildText,
-        parent: TICKET_CATEGORY_ID,
-        permissionOverwrites: [
-          {
-            id: interaction.guild.id,
-            deny: [PermissionFlagsBits.ViewChannel]
-          },
-          {
-            id: interaction.user.id,
-            allow: [
-              PermissionFlagsBits.ViewChannel,
-              PermissionFlagsBits.SendMessages
-            ]
-          },
-          {
-            id: STAFF_ROLE_ID,
-            allow: [
-              PermissionFlagsBits.ViewChannel,
-              PermissionFlagsBits.SendMessages
-            ]
-          }
-        ]
-      });
-
-      const ticketEmbed = new EmbedBuilder()
-        .setTitle('🎫 Нова заявка')
-        .addFields(
-          { name: 'Користувач', value: `<@${interaction.user.id}>` },
-          { name: 'Імʼя', value: name },
-          { name: 'Причина', value: reason }
-        )
-        .setColor(0x2ecc71);
-
-      await channel.send({ embeds: [ticketEmbed] });
-
-      await interaction.editReply({
-        content: `✅ Заявку створено: ${channel}`
-      });
-    }
-
+    await rest.put(
+      Routes.applicationCommands(process.env.CLIENT_ID),
+      { body: commands }
+    );
+    console.log('✅ Slash commands registered');
   } catch (err) {
-    console.error(err);
-    if (interaction.isRepliable()) {
-      try {
-        await interaction.reply({
-          content: '❌ Сталася помилка',
-          ephemeral: true
-        });
-      } catch {}
-    }
+    console.error('❌ Slash command register error:', err);
   }
 });
 
-/* ================= LOGIN ================= */
+// ================== INTERACTIONS ==================
 
-client.login(TOKEN);
+client.on('interactionCreate', async interaction => {
+
+  // ---------- SLASH ----------
+  if (interaction.isChatInputCommand()) {
+    if (interaction.commandName === 'ticketsetup') {
+
+      const embed = new EmbedBuilder()
+        .setTitle('📩 Подати заявку')
+        .setColor(0xe29549)
+        .setDescription(
+          'Натисніть кнопку нижче, щоб створити заявку на сервер **Cognia**.\n\n' +
+          '⚠️ **Одна заявка на користувача**'
+        );
+
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId('create_application_ticket')
+          .setLabel('➕ Створити заявку')
+          .setStyle(ButtonStyle.Primary)
+      );
+
+      await interaction.reply({
+        embeds: [embed],
+        components: [row]
+      });
+    }
+    return;
+  }
+
+  // ---------- BUTTONS ----------
+  if (interaction.isButton()) {
+
+    // CREATE
+    if (interaction.customId === 'create_application_ticket') {
+      const modal = new ModalBuilder()
+        .setCustomId('application_form')
+        .setTitle('Заявка на сервер Cognia');
+
+      modal.addComponents(
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder()
+            .setCustomId('mc_nick')
+            .setLabel('Minecraft нік')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true)
+        ),
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder()
+            .setCustomId('age')
+            .setLabel('Вік')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true)
+        ),
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder()
+            .setCustomId('secret')
+            .setLabel('Секретне слово з правил')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true)
+        ),
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder()
+            .setCustomId('how_know')
+            .setLabel('Як дізнались про проект?')
+            .setStyle(TextInputStyle.Paragraph)
+            .setRequired(true)
+        )
+      );
+
+      await interaction.showModal(modal);
+      return;
+    }
+
+    // ACCEPT
+    if (interaction.customId.startsWith('accept_application_')) {
+      if (!ADMIN_IDS.includes(interaction.user.id)) {
+        return interaction.reply({ content: '❌ Тільки адміністрація.', ephemeral: true });
+      }
+
+      const mcNick = interaction.channel.topic?.replace('MC_NICK:', '');
+      if (!mcNick) {
+        return interaction.reply({ content: '⚠️ MC нік не знайдено.', ephemeral: true });
+      }
+
+      try {
+        const rcon = await Rcon.connect(RCON_CONFIG);
+        await rcon.send(`whitelist add ${mcNick}`);
+        await rcon.end();
+
+        await interaction.reply(`✅ **${mcNick}** додано в whitelist`);
+      } catch (e) {
+        console.error(e);
+        return interaction.reply('❌ Помилка RCON');
+      }
+
+      setTimeout(() => interaction.channel.delete().catch(() => {}), 5 * 60 * 1000);
+      return;
+    }
+
+    // DENY
+    if (interaction.customId.startsWith('deny_application_')) {
+      if (!ADMIN_IDS.includes(interaction.user.id)) {
+        return interaction.reply({ content: '❌ Тільки адміністрація.', ephemeral: true });
+      }
+
+      await interaction.reply('❌ Заявку відхилено. Канал буде видалено через 5 хв.');
+      setTimeout(() => interaction.channel.delete().catch(() => {}), 5 * 60 * 1000);
+      return;
+    }
+  }
+
+  // ---------- MODAL ----------
+  if (
+    interaction.type === InteractionType.ModalSubmit &&
+    interaction.customId === 'application_form'
+  ) {
+
+    const guild = interaction.guild;
+    if (!guild) {
+      return interaction.reply({ content: '❌ Guild not found', ephemeral: true });
+    }
+
+    const mcNick = interaction.fields.getTextInputValue('mc_nick').trim();
+    if (!/^[a-zA-Z0-9_]{3,16}$/.test(mcNick)) {
+      return interaction.reply({ content: '❌ Невірний Minecraft-нік', ephemeral: true });
+    }
+
+    const username = interaction.user.username
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '-')
+      .slice(0, 20);
+
+    if (guild.channels.cache.find(c => c.name === `заявка-${username}`)) {
+      return interaction.reply({ content: '❌ У вас вже є заявка.', ephemeral: true });
+    }
+
+    const overwrites = [
+      {
+        id: guild.roles.everyone.id,
+        deny: [PermissionsBitField.Flags.ViewChannel]
+      },
+      {
+        id: interaction.user.id,
+        allow: [
+          PermissionsBitField.Flags.ViewChannel,
+          PermissionsBitField.Flags.SendMessages
+        ]
+      },
+      ...ADMIN_IDS.map(id => ({
+        id,
+        allow: [
+          PermissionsBitField.Flags.ViewChannel,
+          PermissionsBitField.Flags.SendMessages
+        ]
+      }))
+    ];
+
+    const channel = await guild.channels.create({
+      name: `заявка-${username}`,
+      type: ChannelType.GuildText,
+      parent: APPLICATION_CATEGORY_ID,
+      topic: `MC_NICK:${mcNick}`,
+      permissionOverwrites: overwrites
+    });
+
+    const embed = new EmbedBuilder()
+      .setTitle('📨 Нова заявка')
+      .setColor(0xe29549)
+      .setDescription(
+        `**Minecraft нік:** ${mcNick}\n` +
+        `**Вік:** ${interaction.fields.getTextInputValue('age')}\n` +
+        `**Секретне слово:** ${interaction.fields.getTextInputValue('secret')}\n` +
+        `**Як дізнались:** ${interaction.fields.getTextInputValue('how_know')}`
+      );
+
+    const buttons = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`accept_application_${interaction.user.id}`)
+        .setLabel('✅ Прийняти')
+        .setStyle(ButtonStyle.Success),
+      new ButtonBuilder()
+        .setCustomId(`deny_application_${interaction.user.id}`)
+        .setLabel('❌ Відхилити')
+        .setStyle(ButtonStyle.Danger)
+    );
+
+    await channel.send({
+      content: `<@${interaction.user.id}>`,
+      embeds: [embed],
+      components: [buttons]
+    });
+
+    await interaction.reply({
+      content: '✅ Заявка створена!',
+      ephemeral: true
+    });
+  }
+});
+
+// ================== EXPRESS ==================
+
+const app = express();
+app.get('/', (_, res) => res.send('Bot alive'));
+app.listen(3000);
+
+// ================== LOGIN ==================
+
+client.login(process.env.DISCORD_TOKEN);
